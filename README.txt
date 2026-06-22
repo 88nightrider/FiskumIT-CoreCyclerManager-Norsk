@@ -1,5 +1,12 @@
-﻿Fiskum IT CoreCycler Manager v0.8.5
+﻿Fiskum IT CoreCycler Manager v0.8.6
 ============================================================
+
+Nyheter i v0.8.6
+----------------
+- Alle test-configene i Manager\config (alle Prime95/y-cruncher/Linpack-
+  varianter + AssistedUndervolting_Intel/Ryzen) har na beepOnError = 0
+  og flashOnError = 0 i stedet for 1 - ingen pip/skjermblink ved en
+  oppdaget feil under testing
 
 Nyheter i v0.8.5
 ----------------
