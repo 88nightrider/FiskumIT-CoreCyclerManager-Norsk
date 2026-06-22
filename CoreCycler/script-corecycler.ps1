@@ -25,7 +25,9 @@
         configurable lower safety limit ("minValue").
       - A small number of targeted bugfixes (an initialization-order issue, and
         a Rename-Item overwrite issue) found while integrating with the Manager.
-    See https://github.com/sp00n/corecycler for the unmodified original project.
+    See https://github.com/sp00n/corecycler for the unmodified original project, and
+    https://github.com/88nightrider/FiskumIT-CoreCyclerManager-Norsk for the full
+    "Fiskum IT CoreCycler Manager" project this modified copy is bundled with.
 .PARAMETER CoreFromAutoMode
     If set, indicates that we are in Auto Mode and this core was the last one being tested before a reboot/crash
 #>

@@ -190,21 +190,23 @@ Nyheter i v0.8.1
 
 Mappestruktur
 -------------
-FiskumIT-CoreCyclerManager-v0.8.2\
-  Installer.bat
-  README.txt
-  Manager\
-    FiskumIT-CoreCyclerManager-v0.8.2.ps1
-    FiskumIT-Logo.ico
-    Start-FiskumIT-CoreCyclerManager.bat
-    Stopp-CoreCycler-Prosesser.bat
-    Nullstill-State.bat
-    testplan.json
-    state.json
-    avansert-valg.json   (lages av "Avansert..."-dialogen, valgfritt)
-    config\         (CoreCycler-config-presets, inkl. AssistedUndervolting_Ryzen.ini
-                     og AssistedUndervolting_Intel.ini)
-  CoreCycler\       (sp00n/corecycler - script-corecycler.ps1 m.m.)
+(flat, versjonsuavhengig struktur - versjonsnummer folges via git-tags/GitHub Releases,
+ikke mappenavn, se https://github.com/88nightrider/FiskumIT-CoreCyclerManager-Norsk/releases)
+
+Installer.bat
+README.txt
+Manager\
+  FiskumIT-CoreCyclerManager.ps1
+  FiskumIT-Logo.ico
+  Start-FiskumIT-CoreCyclerManager.bat
+  Stopp-CoreCycler-Prosesser.bat
+  Nullstill-State.bat
+  testplan.json
+  state.json
+  avansert-valg.json   (lages av "Avansert..."-dialogen, valgfritt)
+  config\         (CoreCycler-config-presets, inkl. AssistedUndervolting_Ryzen.ini
+                   og AssistedUndervolting_Intel.ini)
+CoreCycler\       (sp00n/corecycler - script-corecycler.ps1 m.m.)
 
 Installasjon
 ------------

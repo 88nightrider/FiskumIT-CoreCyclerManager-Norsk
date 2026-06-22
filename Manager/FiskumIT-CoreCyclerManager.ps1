@@ -1,4 +1,12 @@
-﻿#requires -Version 5.1
+﻿<#
+    Fiskum IT CoreCycler Manager
+    Norsk GUI og automatisering rundt sp00n sin CoreCycler (https://github.com/sp00n/corecycler)
+    for Curve Optimizer-/spenningsundervolting (AMD/Intel) og CPU-stabilitetstesting.
+
+    Repo:    https://github.com/88nightrider/FiskumIT-CoreCyclerManager-Norsk
+    Lisens:  CC BY-NC-SA 4.0 (se LICENSE i repo-roten)
+#>
+#requires -Version 5.1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -225,6 +233,89 @@ $CoreCyclerConfig = Join-Path $CoreCyclerDir 'config.ini'
 $CoreCyclerLogDir = Join-Path $CoreCyclerDir 'logs'
 $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 
+# Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
+# oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
+# DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
+$ManagerVersion = '0.8.2'
+# Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
+# i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
+$GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
+
+function Test-NyVersjonTilgjengelig {
+    # Fiskum IT (v0.8.2): sjekker GitHub Releases-API'et for DETTE repoet direkte (ingen
+    # autentisering - offentlig, skrivebeskyttet GET). Kaster ALDRI videre - en feilende
+    # nettverkssjekk skal aldri kunne stoppe noe annet i Manageren. Kort timeout (5s) av
+    # samme grunn - verre med en hengende oppstart enn en sjelden mislykket sjekk.
+    # Brukes bade av den automatiske, cachede oppstartssjekken (Invoke-
+    # OppdateringssjekkVedOppstart) og av "Sjekk etter oppdatering"-knappen (som alltid
+    # kaller denne direkte, uten cache - et eksplisitt klikk skal alltid gi et live svar)
+    $resultat = [pscustomobject]@{
+        Forsokt               = $false
+        NyVersjonTilgjengelig = $null
+        SisteVersjon          = $null
+        Url                   = $null
+        Feilmelding           = $null
+    }
+
+    try {
+        $respons = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$GitHubRepo/releases/latest" `
+            -Headers @{ 'User-Agent' = 'FiskumIT-CoreCyclerManager' } `
+            -TimeoutSec 5 `
+            -ErrorAction Stop
+
+        $resultat.Forsokt = $true
+        $sisteVersjonStreng = [string]$respons.tag_name -replace '^v', ''
+        $resultat.SisteVersjon = $sisteVersjonStreng
+        $resultat.Url = [string]$respons.html_url
+        $resultat.NyVersjonTilgjengelig = ([version]$sisteVersjonStreng) -gt ([version]$ManagerVersion)
+    }
+    catch {
+        $resultat.Feilmelding = $_.Exception.Message
+        Write-ManagerLog -Text "Kunne ikke sjekke etter oppdatering: $($resultat.Feilmelding)"
+    }
+
+    return $resultat
+}
+
+function Invoke-OppdateringssjekkVedOppstart {
+    # Fiskum IT (v0.8.2): automatisk, men cachet til maks en gang hver 2. time - sjekker
+    # IKKE pa hver oppstart for a unnga a belaste GitHub sitt API unodvendig. Oppdaterer
+    # knappeteksten i UI'et (hvis bygget) hvis en nyere versjon faktisk blir funnet
+    param(
+        [Parameter(Mandatory)]
+        $State
+    )
+
+    $skalSjekke = $true
+
+    if (-not [string]::IsNullOrWhiteSpace($State.sisteOppdateringssjekk)) {
+        try {
+            $sisteSjekk = [DateTime]::Parse($State.sisteOppdateringssjekk, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            $skalSjekke = ((Get-Date) - $sisteSjekk).TotalHours -ge 2
+        }
+        catch {
+            $skalSjekke = $true
+        }
+    }
+
+    if (-not $skalSjekke) {
+        return
+    }
+
+    $resultat = Test-NyVersjonTilgjengelig
+
+    if ($resultat.Forsokt) {
+        $State.sisteOppdateringssjekk = Get-NowIso
+        Save-State -State $State
+
+        if ($resultat.NyVersjonTilgjengelig -and $App.Ui.btnSjekkOppdatering) {
+            $App.Ui.btnSjekkOppdatering.Text = "Ny versjon tilgjengelig: v$($resultat.SisteVersjon)"
+            $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
+        }
+    }
+}
+
 # Fiskum IT: satt av Resolve-CrashedRun hvis en krasj ble oppdaget og korrigert ved oppstart -
 # brukes til a gjenoppta testen automatisk etter at UI-et er bygget, se bunnen av scriptet
 $PendingCrashResume = $false
@@ -322,6 +413,10 @@ function New-DefaultState {
         vindueHoyde  = 0
         vindueX      = 0
         vindueY      = 0
+
+        # Fiskum IT (v0.8.2): tidspunkt (ISO) for siste GitHub-oppdateringssjekk - se
+        # Invoke-OppdateringssjekkVedOppstart. Tom streng = aldri sjekket, sjekk na
+        sisteOppdateringssjekk = ''
     }
 }
 
@@ -4123,7 +4218,7 @@ function Show-AvansertDialog {
 
 function Build-Ui {
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = 'Fiskum IT CoreCycler Manager v0.8.2'
+    $form.Text = "Fiskum IT CoreCycler Manager v$ManagerVersion"
     $form.StartPosition = 'CenterScreen'
     # Fiskum IT (v0.8.2): vinduet ble for hoyt til a passe godt pa en 1080p-skjerm (spesielt
     # med oppgavelinjen). Bredden er IKKE problemet (1260 er allerede smalt nok for bade
@@ -4291,6 +4386,12 @@ function Build-Ui {
     $lblHint = New-Label -Text 'Hurtigtaster: F5 = Start/Gjenoppta, Esc = Stopp' -X 22 -Y 172 -W 420 -H 24
     $lblHint2 = New-Label -Text 'Tips: Skrivebordsrapporten viser også sti til spenningslogg.' -X 22 -Y 198 -W 520 -H 24
 
+    # Fiskum IT (v0.8.2): knappeteksten selv er ogsa indikatoren (endres til "Ny versjon
+    # tilgjengelig: vX.Y.Z" + fremhevet farge nar Invoke-OppdateringssjekkVedOppstart finner
+    # en - se App.Ui.btnSjekkOppdatering) i stedet for en egen label-kontroll, for a spare
+    # den begrensede plassen i den faste (ikke-rullbare) topp-sonen
+    $btnSjekkOppdatering = New-Button -Text 'Sjekk etter oppdatering' -X 22 -Y 224 -W 300 -H 30
+
     $groupActions.Controls.AddRange(@(
         $btnStart,
         $btnStop,
@@ -4301,7 +4402,8 @@ function Build-Ui {
         $btnExit,
         $chkAutoContinue,
         $lblHint,
-        $lblHint2
+        $lblHint2,
+        $btnSjekkOppdatering
     ))
 
     $groupModus = New-Object System.Windows.Forms.GroupBox
@@ -4521,6 +4623,7 @@ function Build-Ui {
     $App.Ui.chkAutostart = $chkAutostart
     $App.Ui.chkAutoRestart = $chkAutoRestart
     $App.Ui.numRestartWaitMinutes = $numRestartWaitMinutes
+    $App.Ui.btnSjekkOppdatering = $btnSjekkOppdatering
 
     $btnStart.Add_Click({
         Start-CurrentOrResume
@@ -4659,6 +4762,50 @@ function Build-Ui {
 
     $btnAvansert.Add_Click({
         Show-AvansertDialog
+    })
+
+    $btnSjekkOppdatering.Add_Click({
+        # Fiskum IT (v0.8.2): et eksplisitt klikk ignorerer 2-timers cachen fra
+        # Invoke-OppdateringssjekkVedOppstart - et bevisst brukervalg skal alltid gi et
+        # live svar. Bruker $App.Ui/$App.State (ikke de bare lokale variablene) inni
+        # handleren - Build-Ui sitt eget stack-frame er borte naar dette faktisk fyrer
+        $resultat = Test-NyVersjonTilgjengelig
+        $App.State.sisteOppdateringssjekk = Get-NowIso
+        Save-State -State $App.State
+
+        if (-not $resultat.Forsokt) {
+            [System.Windows.Forms.MessageBox]::Show(
+                'Kunne ikke sjekke etter oppdatering (ingen internettforbindelse, eller GitHub svarte ikke). Se Manager-loggen for detaljer.',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            ) | Out-Null
+            return
+        }
+
+        if ($resultat.NyVersjonTilgjengelig) {
+            $App.Ui.btnSjekkOppdatering.Text = "Ny versjon tilgjengelig: v$($resultat.SisteVersjon)"
+            $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
+
+            $svar = [System.Windows.Forms.MessageBox]::Show(
+                "Ny versjon tilgjengelig: v$($resultat.SisteVersjon) (du har v$ManagerVersion).`r`n`r`nÅpne nedlastingssiden?",
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+
+            if ($svar -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Start-Process $resultat.Url
+            }
+        }
+        else {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Du har siste versjon (v$ManagerVersion).",
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+        }
     })
 
     $form.Add_KeyDown({
@@ -4814,7 +4961,7 @@ Clear-StaleRunningState -State $App.State
 Check-StaleCoreCyclerProcessesOnStartup -State $App.State
 Check-PendingAutoResume -State $App.State
 
-Write-ManagerLog -Text 'Fiskum IT CoreCycler Manager v0.8.2 startet.'
+Write-ManagerLog -Text "Fiskum IT CoreCycler Manager v$ManagerVersion startet."
 Add-History -State $App.State -Message 'Manager startet'
 
 # Fiskum IT: logger CPU-instruksjonssett tidlig - nyttig for feilsoking (f.eks. via
@@ -4871,6 +5018,11 @@ if ($App.Ui.numRestartWaitMinutes) {
 Update-AssistertUiEnabled
 Refresh-UiState
 Refresh-CoreCyclerLogView
+
+# Fiskum IT (v0.8.2): automatisk, cachet (maks hvert 2. time) oppdateringssjekk mot GitHub -
+# se Invoke-OppdateringssjekkVedOppstart. Etter Build-Ui (knappen ma finnes for at et funn
+# skal kunne vises) og FOR ShowDialog - kort timeout internt, blokkerer aldri lenge
+Invoke-OppdateringssjekkVedOppstart -State $App.State
 
 # Fiskum IT: en krasj ble oppdaget og korrigert under Clear-StaleRunningState ovenfor -
 # gjenoppta testen automatisk na som UI-et er klart

@@ -1,7 +1,8 @@
-# Fiskum IT: dette repoet skal kun inneholde den aktive v0.8.2-utgaven + dokumentasjon i
-# roten. Eldre versjonsmapper (v0.3-v0.8.1), store .zip-utgivelser ("1.zip files\"),
-# diagnostikkdumper fra ekte testmaskiner ("Feil\") og lokale Claude Code-innstillinger
-# (".claude\") er bevisst utelatt - se commit-melding/PR for begrunnelse.
+# Fiskum IT: dette repoet skal inneholde den aktive utgaven (flat struktur i roten, uten
+# versjonsstempling i mappenavn - versjonering skjer via git-tags/GitHub Releases) +
+# dokumentasjon i roten. Eldre lokale versjonsmapper (v0.3-v0.8.1), store .zip-utgivelser
+# ("1.zip files\"), diagnostikkdumper fra ekte testmaskiner ("Feil\") og lokale Claude
+# Code-innstillinger (".claude\") er bevisst utelatt.
 /*
 !/.gitignore
 !/README.md
@@ -10,13 +11,19 @@
 !/Utviklingslogg-Prosessorstotte.md
 !/Utviklingslogg-UI-Stabilitet.md
 !/Vedlikehold-Prosessorstotte.md
-!/FiskumIT-CoreCyclerManager-v0.8.2/
+!/README.txt
+!/Installer.bat
+!/Collect-FiskumITDiagnostics.ps1
+!/Collect-FiskumITDiagnostics.bat
+!/Create-FiskumITDiagnosticsShortcut.ps1
+!/Manager/
+!/CoreCycler/
 
 # Fiskum IT: kjøretids-/sesjonsspesifikk tilstand for DENNE maskinen - genereres
 # automatisk på nytt ved første kjøring (se New-DefaultState/Get-State/Ensure-Directory),
 # skal ikke versjoneres
-/FiskumIT-CoreCyclerManager-v0.8.2/Manager/state.json
-/FiskumIT-CoreCyclerManager-v0.8.2/Manager/logs/
-/FiskumIT-CoreCyclerManager-v0.8.2/Manager/backup/
-/FiskumIT-CoreCyclerManager-v0.8.2/Manager/reports/
-/FiskumIT-CoreCyclerManager-v0.8.2/CoreCycler/logs/
+/Manager/state.json
+/Manager/logs/
+/Manager/backup/
+/Manager/reports/
+/CoreCycler/logs/

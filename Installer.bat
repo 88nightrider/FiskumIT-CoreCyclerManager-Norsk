@@ -3,7 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 title Fiskum IT CoreCycler Manager - Installer
 
 REM ============================================================
-REM Fiskum IT - Installer CoreCycler Manager v0.8.2
+REM Fiskum IT - Installer CoreCycler Manager
 REM   - Dobbeltklikk for aa installere.
 REM   - Skriptet ber AUTOMATISK om administratorrettigheter via UAC.
 REM     Du skal IKKE maatte hoyreklikke og velge "Kjor som administrator".
@@ -12,7 +12,7 @@ REM ============================================================
 set "LOG_FILE=%TEMP%\FiskumIT-CoreCyclerManager-Installer.log"
 
 echo ============================================================ > "%LOG_FILE%"
-echo Fiskum IT CoreCycler Manager - Installer v0.8.2 >> "%LOG_FILE%"
+echo Fiskum IT CoreCycler Manager - Installer >> "%LOG_FILE%"
 echo Startet: %date% %time% >> "%LOG_FILE%"
 echo BAT: %~f0 >> "%LOG_FILE%"
 echo Args: %* >> "%LOG_FILE%"
@@ -66,7 +66,7 @@ set "TARGET_ROOT=C:\FiskumIT\CoreCyclerManager"
 set "TARGET_MANAGER=%TARGET_ROOT%\Manager"
 set "TARGET_CORECYCLER=%TARGET_ROOT%\CoreCycler"
 
-set "MANAGER_PS1_NAME=FiskumIT-CoreCyclerManager-v0.8.2.ps1"
+set "MANAGER_PS1_NAME=FiskumIT-CoreCyclerManager.ps1"
 set "START_BAT_NAME=Start-FiskumIT-CoreCyclerManager.bat"
 set "DIAG_PS1_NAME=Collect-FiskumITDiagnostics.ps1"
 set "DIAG_BAT_NAME=Collect-FiskumITDiagnostics.bat"

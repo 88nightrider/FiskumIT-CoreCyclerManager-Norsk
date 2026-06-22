@@ -2,11 +2,11 @@
 setlocal EnableExtensions
 
 REM ------------------------------------------------------------
-REM Fiskum IT - Start CoreCycler Manager v0.8.2
+REM Fiskum IT - Start CoreCycler Manager
 REM ------------------------------------------------------------
 
 set "SCRIPT_DIR=%~dp0"
-set "MANAGER_PS1=%SCRIPT_DIR%FiskumIT-CoreCyclerManager-v0.8.2.ps1"
+set "MANAGER_PS1=%SCRIPT_DIR%FiskumIT-CoreCyclerManager.ps1"
 set "LOG_DIR=%SCRIPT_DIR%logs"
 set "START_LOG=%LOG_DIR%\StartManager.log"
 

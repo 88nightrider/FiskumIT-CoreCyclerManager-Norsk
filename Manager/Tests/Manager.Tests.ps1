@@ -7,11 +7,12 @@
 # mocket/stubbet - samme teknikk som ble brukt manuelt for a verifisere Write-SluttRapport
 # under utviklingen av disse funksjonene. Dette holder testene i sync med den faktiske koden
 # uten a duplisere logikken, men dekker BEVISST kun rene, godt isolerte funksjoner
-# (Get-PropertyNames, Get-UndervoltStotteInfo, Get-AnbefaltMargin) - ikke UI/motor-integrasjon.
+# (Get-PropertyNames, Get-UndervoltStotteInfo, Get-AnbefaltMargin, Test-NyVersjonTilgjengelig)
+# - ikke UI/motor-integrasjon.
 
-$ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager-v0.8.2.ps1'
+$ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager.ps1'
 
-$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin')
+$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig')
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ManagerScript, [ref]$null, [ref]$null)
 $funksjoner = $ast.FindAll({
@@ -30,6 +31,12 @@ $uttrukketKode = ($funksjoner | ForEach-Object { $_.Extent.Text }) -join "`r`n`r
 function Write-ManagerLog {
     param([string]$Text)
 }
+
+# Fiskum IT: Test-NyVersjonTilgjengelig leser disse som script-scope variabler (definert i
+# selve Manager-scriptet, ikke inni funksjonen) - ma finnes her ogsa for at funksjonen skal
+# kunne kjores isolert
+$GitHubRepo = 'test-eier/test-repo'
+$ManagerVersion = '0.8.2'
 
 $midlertidigFil = Join-Path ([System.IO.Path]::GetTempPath()) ("FiskumIT-ManagerTests-{0}.ps1" -f ([Guid]::NewGuid()))
 Set-Content -LiteralPath $midlertidigFil -Value $uttrukketKode -Encoding UTF8
@@ -178,5 +185,46 @@ Describe 'Get-AnbefaltMargin' {
     It 'legger IKKE pa ekstra margin nar gjennomsnittet er ukjent (-1)' {
         $stotte = [pscustomobject]@{ Vendor = 'Intel'; MinVerdi = $null }
         (Get-AnbefaltMargin -Stotte $stotte -GjennomsnittMinutterPerKjerne -1).Margin | Should Be 10
+    }
+}
+
+Describe 'Test-NyVersjonTilgjengelig' {
+    It 'oppdager en nyere versjon pa GitHub' {
+        Mock Invoke-RestMethod {
+            [pscustomobject]@{
+                tag_name = 'v0.9.0'
+                html_url = 'https://github.com/test-eier/test-repo/releases/tag/v0.9.0'
+            }
+        }
+
+        $resultat = Test-NyVersjonTilgjengelig
+        $resultat.Forsokt               | Should Be $true
+        $resultat.NyVersjonTilgjengelig | Should Be $true
+        $resultat.SisteVersjon          | Should Be '0.9.0'
+        $resultat.Url                   | Should Be 'https://github.com/test-eier/test-repo/releases/tag/v0.9.0'
+    }
+
+    It 'rapporterer ingen ny versjon nar GitHub allerede har samme tag som ManagerVersion' {
+        Mock Invoke-RestMethod {
+            [pscustomobject]@{
+                tag_name = 'v0.8.2'
+                html_url = 'https://github.com/test-eier/test-repo/releases/tag/v0.8.2'
+            }
+        }
+
+        $resultat = Test-NyVersjonTilgjengelig
+        $resultat.Forsokt               | Should Be $true
+        $resultat.NyVersjonTilgjengelig | Should Be $false
+    }
+
+    It 'feiler stille (Forsokt=$false) ved en nettverksfeil, uten a kaste videre' {
+        Mock Invoke-RestMethod {
+            throw 'Simulert nettverksfeil'
+        }
+
+        $resultat = Test-NyVersjonTilgjengelig
+        $resultat.Forsokt               | Should Be $false
+        $resultat.NyVersjonTilgjengelig | Should Be $null
+        $resultat.Feilmelding           | Should Match 'Simulert nettverksfeil'
     }
 }

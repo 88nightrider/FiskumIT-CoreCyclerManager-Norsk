@@ -205,43 +205,24 @@ function Get-SystemSpecification {
     return $lines
 }
 
-function Get-LatestVersionFolder {
-    # Fiskum IT: brukes til aa finne DEN AKTIVE versjonsmappen dynamisk (f.eks.
-    # "FiskumIT-CoreCyclerManager-v0.8.2"), i stedet for aa hardkode et versjonsnummer
-    # - slik trenger ikke dette scriptet endres hver gang det kommer en ny versjon.
-    # [version]-cast sorterer riktig numerisk (v0.10 > v0.8), ikke bare alfabetisk
-    param(
-        [string]$WorkspaceRoot
-    )
-
-    return Get-ChildItem -Path $WorkspaceRoot -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^FiskumIT-CoreCyclerManager-v\d+\.\d+' } |
-        Sort-Object { [version]($_.Name -replace '^FiskumIT-CoreCyclerManager-v', '') } -Descending |
-        Select-Object -First 1
-}
-
 function Get-ArchiveVersion {
-    # Fiskum IT: lest primaert fra Manager .ps1-filnavnet (f.eks.
-    # "FiskumIT-CoreCyclerManager-v0.8.2.ps1") - Manager-mappen ligger alltid som sibling
-    # til dette scriptet, bade i kildetreet og i en faktisk installasjon. Et
-    # "FiskumIT-CoreCyclerManager-vX.X"-MAPPENAVN (den gamle metoden) finnes derimot KUN
-    # i kildetreet under utvikling, ikke i en installert "C:\FiskumIT\CoreCyclerManager\"
-    # - den brukes na bare som reserve-fallback
+    # Fiskum IT: leser versjonsnummeret direkte fra $ManagerVersion-variabelen inni selve
+    # Manager .ps1-filens kildetekst (regex, IKKE ved a dot-source/kjore filen). Mappe-/
+    # filnavn er na bevisst versjonsuavhengige (se README - versjonering skjer via git-tags/
+    # GitHub Releases) - det gamle "les fra FiskumIT-CoreCyclerManager-vX.X.ps1-filnavnet
+    # eller -mappenavnet"-oppsettet er derfor ikke lenger en gyldig kilde
     param(
         [string]$ScriptRoot
     )
 
-    $managerScript = Get-ChildItem -Path (Join-Path $ScriptRoot 'Manager') -Filter 'FiskumIT-CoreCyclerManager-v*.ps1' -ErrorAction SilentlyContinue |
-        Select-Object -First 1
+    $managerScript = Join-Path $ScriptRoot 'Manager\FiskumIT-CoreCyclerManager.ps1'
 
-    if ($managerScript -and $managerScript.BaseName -match '(v\d+(\.\d+)+)$') {
-        return $Matches[1]
-    }
+    if (Test-Path -LiteralPath $managerScript) {
+        $innhold = Get-Content -LiteralPath $managerScript -Raw -ErrorAction SilentlyContinue
 
-    $candidate = Get-LatestVersionFolder -WorkspaceRoot (Split-Path -Parent $ScriptRoot)
-
-    if ($candidate) {
-        return $candidate.Name -replace '^FiskumIT-CoreCyclerManager-', ''
+        if ($innhold -match "\`$ManagerVersion\s*=\s*'([\d.]+)'") {
+            return "v$($Matches[1])"
+        }
     }
 
     return 'unknown-version'
