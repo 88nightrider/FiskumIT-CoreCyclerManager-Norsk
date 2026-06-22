@@ -1,0 +1,22 @@
+# Fiskum IT: dette repoet skal kun inneholde den aktive v0.8.2-utgaven + dokumentasjon i
+# roten. Eldre versjonsmapper (v0.3-v0.8.1), store .zip-utgivelser ("1.zip files\"),
+# diagnostikkdumper fra ekte testmaskiner ("Feil\") og lokale Claude Code-innstillinger
+# (".claude\") er bevisst utelatt - se commit-melding/PR for begrunnelse.
+/*
+!/.gitignore
+!/CoreCycler-Tilpasninger.md
+!/Utviklingslogg-Prosessorstotte.md
+!/Utviklingslogg-UI-Stabilitet.md
+!/Vedlikehold-Prosessorstotte.md
+!/forslag.txt
+!/verify_install.ps1
+!/FiskumIT-CoreCyclerManager-v0.8.2/
+
+# Fiskum IT: kjøretids-/sesjonsspesifikk tilstand for DENNE maskinen - genereres
+# automatisk på nytt ved første kjøring (se New-DefaultState/Get-State/Ensure-Directory),
+# skal ikke versjoneres
+/FiskumIT-CoreCyclerManager-v0.8.2/Manager/state.json
+/FiskumIT-CoreCyclerManager-v0.8.2/Manager/logs/
+/FiskumIT-CoreCyclerManager-v0.8.2/Manager/backup/
+/FiskumIT-CoreCyclerManager-v0.8.2/Manager/reports/
+/FiskumIT-CoreCyclerManager-v0.8.2/CoreCycler/logs/

@@ -1,0 +1,6 @@
+Ved ferdig status på alle tester. Rydd opp loggfilen på skrivebordet, og legg kun resultatene der. Legg også ved anbefalt offset for stabilitet. trekk fra 5 på disse tallene (eller det du mener må til for å sikre stabilitet, avhengig av hvilken CPU som blir testet. Det er sikkert forskjell mellom de forskjellige modellene av CPU. Og merke CPU, AMD vs Intel).
+
+Har du noen forslag til forbedring? Både testmessig og i UI?
+
+
+Sørg for å holde .md filene oppdatert!

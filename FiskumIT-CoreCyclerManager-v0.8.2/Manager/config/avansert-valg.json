@@ -1,0 +1,112 @@
+[
+  {
+    "id": 1,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 2,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 3,
+    "aktiv": true,
+    "varighet": "5"
+  },
+  {
+    "id": 4,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 5,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 6,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 7,
+    "aktiv": true,
+    "varighet": "5"
+  },
+  {
+    "id": 8,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 9,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 10,
+    "aktiv": true,
+    "varighet": "5"
+  },
+  {
+    "id": 11,
+    "aktiv": true,
+    "varighet": "5"
+  },
+  {
+    "id": 12,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 13,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 14,
+    "aktiv": true,
+    "varighet": "5"
+  },
+  {
+    "id": 15,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 16,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 17,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 18,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 19,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 20,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 21,
+    "aktiv": false,
+    "varighet": "5"
+  },
+  {
+    "id": 22,
+    "aktiv": true,
+    "varighet": "5"
+  }
+]

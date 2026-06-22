@@ -1,0 +1,156 @@
+[
+  {
+    "id": 1,
+    "navn": "Prime95 SSE Huge FFTs 1 thread",
+    "config": "Prime95_SSE_Huge_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 2,
+    "navn": "Prime95 SSE Smallest FFTs 1 thread",
+    "config": "Prime95_SSE_Smallest_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 3,
+    "navn": "Prime95 SSE Small FFTs 1 thread",
+    "config": "Prime95_SSE_Small_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": true
+  },
+  {
+    "id": 4,
+    "navn": "Prime95 SSE Small FFTs 2 threads",
+    "config": "Prime95_SSE_Small_2.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 5,
+    "navn": "Prime95 AVX Huge FFTs 1 thread",
+    "config": "Prime95_AVX_Huge_1.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 6,
+    "navn": "Prime95 AVX Smallest FFTs 1 thread",
+    "config": "Prime95_AVX_Smallest_1.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 7,
+    "navn": "Prime95 AVX Small FFTs 1 thread",
+    "config": "Prime95_AVX_Small_1.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": true
+  },
+  {
+    "id": 8,
+    "navn": "Prime95 AVX Small FFTs 2 threads",
+    "config": "Prime95_AVX_Small_2.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 9,
+    "navn": "Prime95 AVX2 Huge FFTs 1 thread",
+    "config": "Prime95_AVX2_Huge_1.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 10,
+    "navn": "Prime95 AVX2 Smallest FFTs 1 thread",
+    "config": "Prime95_AVX2_Smallest_1.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": true
+  },
+  {
+    "id": 11,
+    "navn": "Prime95 AVX2 Small FFTs 1 thread",
+    "config": "Prime95_AVX2_Small_1.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": true
+  },
+  {
+    "id": 12,
+    "navn": "Prime95 AVX2 Small FFTs 2 threads",
+    "config": "Prime95_AVX2_Small_2.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 13,
+    "navn": "y-cruncher 00-x86 1 thread",
+    "config": "YCRUNCHER_00x86_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 14,
+    "navn": "y-cruncher (auto) 1 thread",
+    "config": "YCRUNCHER_AUTO_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": true
+  },
+  {
+    "id": 15,
+    "navn": "y-cruncher (auto) 2 threads",
+    "config": "YCRUNCHER_AUTO_2.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 16,
+    "navn": "Linpack 2019 Medium 1 thread",
+    "config": "LINPACK_2019_MEDIUM_1.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 17,
+    "navn": "Linpack 2019 Medium 2 threads",
+    "config": "LINPACK_2019_MEDIUM_2.ini",
+    "kreverInstruksjonssett": "",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 18,
+    "navn": "Linpack 2019 Fast 1 thread",
+    "config": "LINPACK_2019_FAST_1.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 19,
+    "navn": "Linpack 2019 Fast 2 threads",
+    "config": "LINPACK_2019_FAST_2.ini",
+    "kreverInstruksjonssett": "AVX",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 20,
+    "navn": "Linpack 2024 Fastest 1 thread",
+    "config": "LINPACK_2024_FASTEST_1.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 21,
+    "navn": "Linpack 2024 Fastest 2 threads",
+    "config": "LINPACK_2024_FASTEST_2.ini",
+    "kreverInstruksjonssett": "AVX2",
+    "standardAnbefalt": false
+  },
+  {
+    "id": 22,
+    "navn": "y-cruncher AVX512 1 thread",
+    "config": "YCRUNCHER_AVX512_1.ini",
+    "kreverInstruksjonssett": "AVX512",
+    "standardAnbefalt": true
+  }
+]
