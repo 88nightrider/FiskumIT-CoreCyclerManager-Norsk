@@ -7,12 +7,12 @@
 # mocket/stubbet - samme teknikk som ble brukt manuelt for a verifisere Write-SluttRapport
 # under utviklingen av disse funksjonene. Dette holder testene i sync med den faktiske koden
 # uten a duplisere logikken, men dekker BEVISST kun rene, godt isolerte funksjoner
-# (Get-PropertyNames, Get-UndervoltStotteInfo, Get-AnbefaltMargin, Test-NyVersjonTilgjengelig)
-# - ikke UI/motor-integrasjon.
+# (Get-PropertyNames, Get-UndervoltStotteInfo, Get-AnbefaltMargin, Test-NyVersjonTilgjengelig,
+# Get-CompletedRoundCount) - ikke UI/motor-integrasjon.
 
 $ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager.ps1'
 
-$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig')
+$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount')
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ManagerScript, [ref]$null, [ref]$null)
 $funksjoner = $ast.FindAll({
@@ -226,5 +226,34 @@ Describe 'Test-NyVersjonTilgjengelig' {
         $resultat.Forsokt               | Should Be $false
         $resultat.NyVersjonTilgjengelig | Should Be $null
         $resultat.Feilmelding           | Should Match 'Simulert nettverksfeil'
+    }
+}
+
+Describe 'Get-CompletedRoundCount' {
+    # Fiskum IT: regresjonstest for buggen sett pa WANJA-GAMER 2026-06-23 (v0.8.2) -
+    # "7/5 (100%)" under en kuratert standardtest-kjoring, fordi den rA test-ID-en fra
+    # testplan.json (ikke sammenhengende i et filtrert delsett) ble brukt direkte som
+    # "antall fullforte" i stedet for en posisjon i $Plan
+    $plan = @(
+        [pscustomobject]@{ id = 3 },
+        [pscustomobject]@{ id = 7 },
+        [pscustomobject]@{ id = 10 },
+        [pscustomobject]@{ id = 11 },
+        [pscustomobject]@{ id = 14 }
+    )
+
+    It 'returnerer 0 nar ingen tester er fullfort enda' {
+        $state = [pscustomobject]@{ status = 'Klar'; sisteFullforteTestId = 0 }
+        Get-CompletedRoundCount -Plan $plan -State $state | Should Be 0
+    }
+
+    It 'teller POSISJONEN i $Plan, ikke selve test-ID-en, for et filtrert delsett' {
+        $state = [pscustomobject]@{ status = 'Kjører'; sisteFullforteTestId = 7 }
+        Get-CompletedRoundCount -Plan $plan -State $state | Should Be 2
+    }
+
+    It 'returnerer Plan.Count nar status er Fullfort, uavhengig av siste ID' {
+        $state = [pscustomobject]@{ status = 'Fullført'; sisteFullforteTestId = 14 }
+        Get-CompletedRoundCount -Plan $plan -State $state | Should Be 5
     }
 }

@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.4'
+$ManagerVersion = '0.8.5'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -2721,6 +2721,16 @@ function Test-LogIndicatesSuccessfulCompletion {
 }
 
 function Get-CompletedRoundCount {
+    # Fiskum IT (v0.8.5): $State.sisteFullforteTestId er den RA test-ID-en fra
+    # testplan.json (1-22), ikke en posisjon i $Plan - $Plan kan vaere et filtrert
+    # delsett (kuratert standardsett/Avansert-valg/CPU-stotte) der ID-ene IKKE er
+    # sammenhengende fra 1. Tidligere ble selve ID-en brukt direkte som "antall
+    # fullforte", som ga absurde tall som "7/5 (100%)" sa snart en delsett-test sin
+    # ID var hoyere enn antall tester i selve delsettet (sett pa WANJA-GAMER, 2026-06-23,
+    # v0.8.2: kuratert sett 3,7,10,11,14 - andre test (id=7) fullfort, tredje (id=10)
+    # aktiv, ga "7/5" i stedet for korrekt "2/5"). Teller na i stedet hvor mange av
+    # $Plan sine EGNE tester som
+    # ligger pa eller for det fullforte punktet i ID-rekkefolgen
     param(
         [Parameter(Mandatory)]
         $Plan,
@@ -2733,13 +2743,11 @@ function Get-CompletedRoundCount {
         return $Plan.Count
     }
 
-    $count = 0
-
-    if ([int]$State.sisteFullforteTestId -gt 0) {
-        $count = [int]$State.sisteFullforteTestId
+    if ([int]$State.sisteFullforteTestId -le 0) {
+        return 0
     }
 
-    return $count
+    return @($Plan | Where-Object { [int]$_.id -le [int]$State.sisteFullforteTestId }).Count
 }
 
 function Write-DesktopStatusReport {

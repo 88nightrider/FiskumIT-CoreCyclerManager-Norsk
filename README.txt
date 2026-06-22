@@ -1,5 +1,17 @@
-﻿Fiskum IT CoreCycler Manager v0.8.4
+﻿Fiskum IT CoreCycler Manager v0.8.5
 ============================================================
+
+Nyheter i v0.8.5
+----------------
+- Rettet en "Fremdrift"-bug (sett pa WANJA-GAMER, fortsatt pa v0.8.2,
+  2026-06-23): viste absurde tall som "7/5 tester (100%)" under en
+  kuratert standardtest-kjoring. Rotarsak: fremdriften brukte den rA
+  test-ID-en fra testplan.json direkte som "antall fullforte tester" -
+  riktig kun nar testplanen er ALLE tester i rekkefolge, men feil sa
+  snart planen er et filtrert delsett (kuratert standardsett/Avansert-
+  valg/CPU-stotte) der ID-ene ikke er sammenhengende fra 1. Teller na i
+  stedet faktisk POSISJON i den aktive testplanen. Ny regresjonstest lagt
+  til i Pester-settet
 
 Nyheter i v0.8.4
 ----------------
