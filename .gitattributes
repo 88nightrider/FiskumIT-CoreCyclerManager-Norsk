@@ -1,0 +1,14 @@
+# Fiskum IT: GitHub sin "Download ZIP"-knapp og den automatisk genererte kildekode-zip-en
+# pa hver Release bruker "git archive" under panseret - export-ignore utelater filer/mapper
+# fra DEN, slik at nedlastingen kun inneholder de faktiske programfilene (samme sett som
+# distribueres lokalt, f.eks. den gamle FiskumIT-CoreCyclerManager-v0.8.1-mappen), ikke
+# repo-metadata/utvikler-dokumentasjon som kun er ment for GitHub-siden. Pavirker IKKE
+# "git clone" - den henter alltid hele repoet uavhengig av denne filen.
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/LICENSE export-ignore
+/README.md export-ignore
+/CoreCycler-Tilpasninger.md export-ignore
+/Utviklingslogg-Prosessorstotte.md export-ignore
+/Utviklingslogg-UI-Stabilitet.md export-ignore
+/Vedlikehold-Prosessorstotte.md export-ignore

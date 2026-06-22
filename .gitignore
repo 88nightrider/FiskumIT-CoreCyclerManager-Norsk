@@ -5,6 +5,7 @@
 # Code-innstillinger (".claude\") er bevisst utelatt.
 /*
 !/.gitignore
+!/.gitattributes
 !/README.md
 !/LICENSE
 !/CoreCycler-Tilpasninger.md
