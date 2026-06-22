@@ -7,6 +7,15 @@ Nyheter i v0.8.3
   sikkerhetsmargin (hvis relevant) og henviser til den fullstendige
   rapporten pa skrivebordet. Tidligere ble en fullfort "Vanlig
   stabilitetstest" kun logget, uten synlig varsling i UI'et
+- Passordsporsmalet for Windows-autologon (auto-restart ved krasj/feil)
+  kommer na nar du trykker "Start" (eller F5) - ikke forst nar en feil
+  faktisk oppstar, som gjorde det upraktisk hvis du ikke sitter ved
+  maskinen. Ny forklarende tekst i UI'et og i selve passord-dialogen
+- Rettet noen steder der "ø" og "a" var feilstavet som vanlig "o"/"a" i
+  Avansert-dialogen og CPU-stotte-statusen (f.eks. "stotter" -> "støtter")
+- "Download ZIP" og kildekode-zip pa GitHub Releases inneholder na kun de
+  faktiske programfilene (samme sett som distribueres lokalt), ikke
+  repo-metadata/utvikler-dokumentasjon (.gitattributes export-ignore)
 
 Nyheter i v0.8.2
 ----------------

@@ -1437,7 +1437,7 @@ function Get-UndervoltStotteInfo {
 
                 $usikkerhetNotat = $(if ($null -eq $cpuFamily) { ' - ADVARSEL: CPUID Family kunne ikke leses, sa dette er basert KUN pa modellnummer (se forbehold om mobile Zen 2-rebrands i AssistedUndervolting_Ryzen.ini)' } else { '' })
                 $info.Forklaring = "AMD Ryzen $modellnummer$suffiks (CPUID Family $cpuFamily) - Curve Optimizer (minimum $($info.MinVerdi))$usikkerhetNotat"
-                $info.KortStatus = "Curve Optimizer stottet (minimum $($info.MinVerdi))"
+                $info.KortStatus = "Curve Optimizer støttet (minimum $($info.MinVerdi))"
             }
             elseif ($harZen3PlusFamily -eq $false) {
                 $info.Forklaring = "AMD Ryzen $modellnummer$suffiks er Zen 2 eller eldre (CPUID Family $cpuFamily) til tross for modellnummeret - AMD har solgt eldre Zen 2-silisium under bade 5000- og 7000-serienumre i den bærbare U/H-serien (f.eks. 'Lucienne'/'Mendocino'). Curve Optimizer er en Zen 3+ (Family 19/25 og nyere) funksjon"
@@ -1450,7 +1450,7 @@ function Get-UndervoltStotteInfo {
         }
         else {
             $info.Forklaring = 'Fant ikke et gjenkjennbart Ryzen-modellnummer for Curve Optimizer (krever Ryzen 5000-serien/Zen 3 eller nyere - Threadripper/EPYC/Athlon er ikke vurdert av denne funksjonen)'
-            $info.KortStatus = 'ukjent modell - Curve Optimizer-stotte ikke vurdert'
+            $info.KortStatus = 'ukjent modell - Curve Optimizer-støtte ikke vurdert'
         }
     }
     elseif ($produsent -eq 'GenuineIntel') {
@@ -4136,7 +4136,7 @@ function Show-AvansertDialog {
     if ($cpuCap.AVX)    { $stottedeSett += 'AVX' }
     if ($cpuCap.AVX2)   { $stottedeSett += 'AVX2' }
     if ($cpuCap.AVX512) { $stottedeSett += 'AVX512' }
-    $lblCpuCaps = New-Label -Text ('Denne CPU-en stotter: ' + ($stottedeSett -join ', ') + ' - tester som krever mer er gratt ut nedenfor.') -X 16 -Y 36 -W 680 -H 20
+    $lblCpuCaps = New-Label -Text ('Denne CPU-en støtter: ' + ($stottedeSett -join ', ') + ' - tester som krever mer er grått ut nedenfor.') -X 16 -Y 36 -W 680 -H 20
     $lblCpuCaps.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
     $dlg.Controls.Add($lblCpuCaps)
 
@@ -4183,7 +4183,7 @@ function Show-AvansertDialog {
             # som for chkAutoSwitch, se Update-AssistertUiEnabled). Holder boksen interaktiv
             # i WinForms-forstand, men reverserer ethvert avhukingsforsok og dimmer teksten
             # manuelt til en fortsatt lesbar gra, for et reelt "gratt ut og kan ikke hukes av"
-            $chk.Text = '{0} - krever {1} (ikke stottet av denne CPU-en)' -f $chk.Text, $test.kreverInstruksjonssett
+            $chk.Text = '{0} - krever {1} (ikke støttet av denne CPU-en)' -f $chk.Text, $test.kreverInstruksjonssett
             $chk.Checked = $false
             $chk.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
             $chk.Add_CheckedChanged({
@@ -4478,7 +4478,7 @@ function Build-Ui {
         # lesbar gratoneoverstyring av selve teksten). Holder radioknappen interaktiv, men
         # CheckedChanged-handleren under reverserer ethvert forsok pa a velge den, og
         # Switch-Modus avviser ogsa byttet som et ekstra forsvarslag
-        $radioAssistert.Text = $radioAssistert.Text + ' - ikke stottet av denne CPU-en'
+        $radioAssistert.Text = $radioAssistert.Text + ' - ikke støttet av denne CPU-en'
         $radioAssistert.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
     }
 
@@ -5021,7 +5021,7 @@ Write-ManagerLog -Text ('CPU-instruksjonssett oppdaget: AVX={0}, AVX2={1}, AVX51
 # samme info som vises kortere i "Modus"-panelet, men nyttig i sin helhet for feilsoking
 # (Collect-FiskumITDiagnostics) hvis en bruker rapporterer at funksjonen ikke virker som forventet
 $undervoltStotteStartup = Get-UndervoltStotteInfo
-Write-ManagerLog -Text ('Assistert undervolting-stotte: {0} (stottet={1}) - {2}' -f $undervoltStotteStartup.CpuNavn, $undervoltStotteStartup.Stottet, $undervoltStotteStartup.Forklaring)
+Write-ManagerLog -Text ('Assistert undervolting-støtte: {0} (støttet={1}) - {2}' -f $undervoltStotteStartup.CpuNavn, $undervoltStotteStartup.Stottet, $undervoltStotteStartup.Forklaring)
 
 # Forsoek aa fylle "Offset-rekke" allerede ved oppstart (ryzen-smu-cli -> logg -> aktiv config)
 try {
