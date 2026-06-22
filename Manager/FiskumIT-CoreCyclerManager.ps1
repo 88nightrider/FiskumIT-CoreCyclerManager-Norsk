@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.2'
+$ManagerVersion = '0.8.3'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -2517,6 +2517,29 @@ function Write-SluttRapport {
     }
 }
 
+function Show-TestFullfortVarsel {
+    # Fiskum IT: varsler brukeren synlig nar en hel testplan/sok er fullfort (samme
+    # $varFullfort-tidspunkt som Write-SluttRapport kalles fra) - tidligere ble en fullfort
+    # "Vanlig stabilitetstest" KUN logget, ingen synlig varsling i UI'et
+    param(
+        $SluttrapportInfo
+    )
+
+    if ($SluttrapportInfo -and $SluttrapportInfo.AnbefalteVerdier -and @($SluttrapportInfo.AnbefalteVerdier).Count -gt 0) {
+        $resultatTekst = "Anbefalt sikkerhetsmargin: $($SluttrapportInfo.Margin) ($($SluttrapportInfo.Forklaring))"
+    }
+    else {
+        $resultatTekst = 'Se rapporten for detaljer om resultatet.'
+    }
+
+    [System.Windows.Forms.MessageBox]::Show(
+        "Testen er fullført.`r`n`r`n$resultatTekst`r`n`r`nFullstendig rapport (skrivebordet): $DesktopLog",
+        'Fiskum IT CoreCycler Manager',
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
+}
+
 function Start-BekreftelsesRundePrompt {
     # Fiskum IT (v0.8.2): tilbys etter en fullfort Assistert undervolting-sok (IKKE etter en
     # bekreftelsesrunde selv - se kallsstedet). Ved Ja: kjorer "Vanlig stabilitetstest" en gang
@@ -3828,7 +3851,7 @@ function Handle-ProcessFinished {
             Write-ManagerLog -Text 'Bekreftelsestest fullført - ingen feil på de anbefalte verdiene over en lengre test.'
 
             [System.Windows.Forms.MessageBox]::Show(
-                'Bekreftelsestest fullført - ingen feil på de anbefalte verdiene over en lengre test.',
+                "Bekreftelsestest fullført - ingen feil på de anbefalte verdiene over en lengre test.`r`n`r`nFullstendig rapport (skrivebordet): $DesktopLog",
                 'Fiskum IT CoreCycler Manager - bekreftelsesrunde',
                 [System.Windows.Forms.MessageBoxButtons]::OK,
                 [System.Windows.Forms.MessageBoxIcon]::Information
@@ -3836,6 +3859,7 @@ function Handle-ProcessFinished {
         }
         else {
             $sluttrapportInfo = Write-SluttRapport -State $App.State
+            Show-TestFullfortVarsel -SluttrapportInfo $sluttrapportInfo
 
             if ($varVarAssistertUndervolting) {
                 Start-BekreftelsesRundePrompt -SluttrapportInfo $sluttrapportInfo

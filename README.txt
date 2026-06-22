@@ -1,5 +1,12 @@
-Fiskum IT CoreCycler Manager v0.8.2
+Fiskum IT CoreCycler Manager v0.8.3
 ============================================================
+
+Nyheter i v0.8.3
+----------------
+- Ny popup-varsling nar en hel testplan/sok er fullfort: viser anbefalt
+  sikkerhetsmargin (hvis relevant) og henviser til den fullstendige
+  rapporten pa skrivebordet. Tidligere ble en fullfort "Vanlig
+  stabilitetstest" kun logget, uten synlig varsling i UI'et
 
 Nyheter i v0.8.2
 ----------------
