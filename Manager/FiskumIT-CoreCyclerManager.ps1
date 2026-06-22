@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.3'
+$ManagerVersion = '0.8.4'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -278,10 +278,37 @@ function Test-NyVersjonTilgjengelig {
     return $resultat
 }
 
+function Show-NyVersjonTilgjengeligVarsel {
+    # Fiskum IT (v0.8.4): delt mellom det automatiske oppstartssjekket og det manuelle
+    # "Sjekk etter oppdatering"-knappeklikket - oppdaterer knappen OG viser en popup med
+    # lenke til nedlastingssiden. Tidligere viste oppstartssjekket KUN en endret knappetekst
+    # ved et automatisk funn - lett a overse hvis brukeren ikke aktivt ser pa skjermen
+    param(
+        [Parameter(Mandatory)]
+        $Resultat
+    )
+
+    if ($App.Ui.btnSjekkOppdatering) {
+        $App.Ui.btnSjekkOppdatering.Text = "Ny versjon tilgjengelig: v$($Resultat.SisteVersjon)"
+        $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
+    }
+
+    $svar = [System.Windows.Forms.MessageBox]::Show(
+        "Ny versjon tilgjengelig: v$($Resultat.SisteVersjon) (du har v$ManagerVersion).`r`n`r`nÅpne nedlastingssiden?",
+        'Fiskum IT CoreCycler Manager',
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+
+    if ($svar -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Start-Process $Resultat.Url
+    }
+}
+
 function Invoke-OppdateringssjekkVedOppstart {
     # Fiskum IT (v0.8.2): automatisk, men cachet til maks en gang hver 2. time - sjekker
-    # IKKE pa hver oppstart for a unnga a belaste GitHub sitt API unodvendig. Oppdaterer
-    # knappeteksten i UI'et (hvis bygget) hvis en nyere versjon faktisk blir funnet
+    # IKKE pa hver oppstart for a unnga a belaste GitHub sitt API unodvendig. Viser en
+    # popup (Show-NyVersjonTilgjengeligVarsel) hvis en nyere versjon faktisk blir funnet
     param(
         [Parameter(Mandatory)]
         $State
@@ -309,9 +336,8 @@ function Invoke-OppdateringssjekkVedOppstart {
         $State.sisteOppdateringssjekk = Get-NowIso
         Save-State -State $State
 
-        if ($resultat.NyVersjonTilgjengelig -and $App.Ui.btnSjekkOppdatering) {
-            $App.Ui.btnSjekkOppdatering.Text = "Ny versjon tilgjengelig: v$($resultat.SisteVersjon)"
-            $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
+        if ($resultat.NyVersjonTilgjengelig) {
+            Show-NyVersjonTilgjengeligVarsel -Resultat $resultat
         }
     }
 }
@@ -4830,19 +4856,7 @@ function Build-Ui {
         }
 
         if ($resultat.NyVersjonTilgjengelig) {
-            $App.Ui.btnSjekkOppdatering.Text = "Ny versjon tilgjengelig: v$($resultat.SisteVersjon)"
-            $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
-
-            $svar = [System.Windows.Forms.MessageBox]::Show(
-                "Ny versjon tilgjengelig: v$($resultat.SisteVersjon) (du har v$ManagerVersion).`r`n`r`nÅpne nedlastingssiden?",
-                'Fiskum IT CoreCycler Manager',
-                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                [System.Windows.Forms.MessageBoxIcon]::Information
-            )
-
-            if ($svar -eq [System.Windows.Forms.DialogResult]::Yes) {
-                Start-Process $resultat.Url
-            }
+            Show-NyVersjonTilgjengeligVarsel -Resultat $resultat
         }
         else {
             [System.Windows.Forms.MessageBox]::Show(
@@ -5066,10 +5080,13 @@ Update-AssistertUiEnabled
 Refresh-UiState
 Refresh-CoreCyclerLogView
 
-# Fiskum IT (v0.8.2): automatisk, cachet (maks hvert 2. time) oppdateringssjekk mot GitHub -
-# se Invoke-OppdateringssjekkVedOppstart. Etter Build-Ui (knappen ma finnes for at et funn
-# skal kunne vises) og FOR ShowDialog - kort timeout internt, blokkerer aldri lenge
-Invoke-OppdateringssjekkVedOppstart -State $App.State
+# Fiskum IT: automatisk, cachet (maks hvert 2. time) oppdateringssjekk mot GitHub - se
+# Invoke-OppdateringssjekkVedOppstart. Kjort fra Add_Shown (IKKE rett her, fOR ShowDialog)
+# slik at hovedvinduet faktisk er synlig FOR en eventuell "ny versjon"-popup vises - en
+# popup som dukker opp fra ingensteds for vinduet selv er synlig, er forvirrende
+$form.Add_Shown({
+    Invoke-OppdateringssjekkVedOppstart -State $App.State
+})
 
 # Fiskum IT: en krasj ble oppdaget og korrigert under Clear-StaleRunningState ovenfor -
 # gjenoppta testen automatisk na som UI-et er klart

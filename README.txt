@@ -1,5 +1,13 @@
-﻿Fiskum IT CoreCycler Manager v0.8.3
+﻿Fiskum IT CoreCycler Manager v0.8.4
 ============================================================
+
+Nyheter i v0.8.4
+----------------
+- Den automatiske oppdateringssjekken ved oppstart viser na ogsa en popup
+  ("Ny versjon tilgjengelig: vX.Y.Z" + lenke til nedlastingssiden) hvis en
+  nyere versjon blir funnet - ikke bare en endret knappetekst pa "Sjekk
+  etter oppdatering"-knappen, som var lett a overse. Sjekken (og en
+  eventuell popup) kjores na ETTER at hovedvinduet er synlig, ikke for
 
 Nyheter i v0.8.3
 ----------------
