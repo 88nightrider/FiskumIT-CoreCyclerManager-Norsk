@@ -4,6 +4,7 @@
 # (".claude\") er bevisst utelatt - se commit-melding/PR for begrunnelse.
 /*
 !/.gitignore
+!/README.md
 !/CoreCycler-Tilpasninger.md
 !/Utviklingslogg-Prosessorstotte.md
 !/Utviklingslogg-UI-Stabilitet.md
