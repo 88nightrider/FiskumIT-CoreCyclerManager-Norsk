@@ -1,4 +1,4 @@
-# Fiskum IT CoreCycler Manager (Norsk)
+﻿# Fiskum IT CoreCycler Manager (Norsk)
 
 Et norsk grensesnitt og automatiseringslag rundt [sp00n sin CoreCycler](https://github.com/sp00n/corecycler) - et verktøy for å finne stabile, undervoltede Curve Optimizer-/spenningsforskyvningsverdier per CPU-kjerne (AMD Ryzen) eller en global verdi (Intel), og for å stabilitetsteste en CPU generelt.
 

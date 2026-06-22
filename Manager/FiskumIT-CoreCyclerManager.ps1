@@ -806,7 +806,7 @@ function Ensure-AutoLogonConfigured {
         Write-ManagerLog -Text "Kunne ikke avgjore om brukerkontoen har passord (mulig Microsoft-/domenekonto) - sporr likevel."
     }
 
-    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message 'Windows autologon må konfigureres for at Manageren skal kunne gjenoppta automatisk etter en automatisk restart. Skriv inn passordet for denne brukeren.'
+    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Windows-autologon må konfigureres for at Manageren skal kunne gjenoppta automatisk etter en automatisk restart.`r`n`r`nSkriv inn PASSORDET for denne brukeren (IKKE PIN-koden/Windows Hello).`r`n`r`nHar kontoen ingen passord? Trykk OK uten å skrive noe."
 
     if (-not $cred) {
         Write-ManagerLog -Text "Bruker avbrøt autologon-oppsett. Auto-restart kan ikke fullføres trygt denne gangen."
@@ -852,6 +852,23 @@ function Ensure-AutoLogonConfigured {
     # Fiskum IT: ALDRI logg $domene/$brukernavn her - brukernavn/passord skal ikke kunne leses ut av loggen
     Write-ManagerLog -Text "Windows-autologon konfigurert."
     return $true
+}
+
+function Invoke-ProaktivAutologonOppsett {
+    # Fiskum IT (v0.8.3): kalt fra et eksplisitt, BRUKERINITIERT "Start"-klikk (F5/knapp) -
+    # IKKE fra automatiske gjenopptak etter krasj/restart, der brukeren typisk IKKE sitter
+    # ved maskinen. Passordsporsmalet kom tidligere KUN reaktivt, inni selve
+    # krasj/restart-handteringen (Invoke-AutoRestartIfEnabled) - upraktisk, siden de fleste
+    # ikke sitter ved PC-en gjennom hele testen og dermed aldri far svart pa prompten.
+    # Sporres derfor proaktivt her i stedet, mens brukeren uansett er ved maskinen.
+    # Ensure-AutoLogonConfigured er selv idempotent (gjor ingenting hvis allerede
+    # konfigurert), sa det er trygt at Invoke-AutoRestartIfEnabled fortsatt ogsa kaller den
+    # senere som et sikkerhetsnett (f.eks. hvis brukeren skrur PA bryteren etter Start)
+    if (-not [bool]$App.State.autoRestartOnFeil) {
+        return
+    }
+
+    [void](Ensure-AutoLogonConfigured -State $App.State)
 }
 
 function Restore-AutoLogonPriorState {
@@ -4514,7 +4531,7 @@ function Build-Ui {
     $groupGjenoppretting = New-Object System.Windows.Forms.GroupBox
     $groupGjenoppretting.Text = 'Automatisk gjenoppretting'
     $groupGjenoppretting.Location = New-Object System.Drawing.Point(16,188)
-    $groupGjenoppretting.Size = New-Object System.Drawing.Size(1214,140)
+    $groupGjenoppretting.Size = New-Object System.Drawing.Size(1214,162)
     $groupGjenoppretting.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupGjenoppretting.BackColor = $panelBackColor
     $groupGjenoppretting.ForeColor = $panelForeColor
@@ -4552,20 +4569,24 @@ function Build-Ui {
     $numRestartWaitMinutes.BackColor = $panelBackColor
     $numRestartWaitMinutes.ForeColor = $panelForeColor
 
-    $lblGjenopprettingHint = New-Label -Text 'Auto-restart konfigurerer Windows-autologon automatisk ved behov (du kan bli bedt om å bekrefte passordet ditt) - kun hvis det ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
+    $lblGjenopprettingHint = New-Label -Text 'Med auto-restart på: du blir spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når en feil oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
     $lblGjenopprettingHint.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
+
+    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Trykk bare OK uten å skrive noe. Husk: det er PASSORDET (ikke PIN-koden/Windows Hello) som skal fylles inn.' -X 18 -Y 134 -W 1170 -H 22
+    $lblGjenopprettingHint2.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupGjenoppretting.Controls.AddRange(@(
         $chkAutostart,
         $chkAutoRestart,
         $lblRestartWaitMinutes,
         $numRestartWaitMinutes,
-        $lblGjenopprettingHint
+        $lblGjenopprettingHint,
+        $lblGjenopprettingHint2
     ))
 
     $groupProgress = New-Object System.Windows.Forms.GroupBox
     $groupProgress.Text = 'Fremdrift'
-    $groupProgress.Location = New-Object System.Drawing.Point(16,336)
+    $groupProgress.Location = New-Object System.Drawing.Point(16,358)
     $groupProgress.Size = New-Object System.Drawing.Size(1214,90)
     $groupProgress.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupProgress.BackColor = $panelBackColor
@@ -4599,7 +4620,7 @@ function Build-Ui {
     # tilgjengelig i Manager\logs\ - se Add-History)
     $groupLog = New-Object System.Windows.Forms.GroupBox
     $groupLog.Text = 'Siste CoreCycler-logg'
-    $groupLog.Location = New-Object System.Drawing.Point(16,434)
+    $groupLog.Location = New-Object System.Drawing.Point(16,456)
     # Fiskum IT (v0.8.2): redusert fra 380 - na i en rullbar panel, sa dette er kun et
     # komfort-mal for standardvisningen, ikke en hard grense
     $groupLog.Size = New-Object System.Drawing.Size(1214,260)
@@ -4650,6 +4671,7 @@ function Build-Ui {
     $App.Ui.btnSjekkOppdatering = $btnSjekkOppdatering
 
     $btnStart.Add_Click({
+        Invoke-ProaktivAutologonOppsett
         Start-CurrentOrResume
     })
 
@@ -4836,6 +4858,7 @@ function Build-Ui {
         param($sender,$e)
 
         if ($e.KeyCode -eq [System.Windows.Forms.Keys]::F5) {
+            Invoke-ProaktivAutologonOppsett
             Start-CurrentOrResume
         }
         elseif ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {

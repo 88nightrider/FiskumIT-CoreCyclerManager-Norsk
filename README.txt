@@ -1,4 +1,4 @@
-Fiskum IT CoreCycler Manager v0.8.3
+﻿Fiskum IT CoreCycler Manager v0.8.3
 ============================================================
 
 Nyheter i v0.8.3
