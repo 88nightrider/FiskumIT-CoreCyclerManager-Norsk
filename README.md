@@ -16,7 +16,7 @@ CoreCycler selv er et rent kommandolinje-/konsoll-script. Denne Manageren legger
 
 - Windows 10/11 (64-bit) - 32-bits Windows støttes ikke
 - Windows PowerShell 5.1 - følger med Windows som standard, ingen separat installasjon nødvendig
-- **.NET Framework** (kreves av PowerShell sitt WinForms-grensesnitt) - er normalt allerede installert på en oppdatert Windows 10/11-maskin. Mangler det (f.eks. en svært minimal/Server Core-installasjon), kan det lastes ned fra [Microsofts offisielle nedlastingsside](https://dotnet.microsoft.com/en-us/download/dotnet-framework)
+- **.NET Framework 3.5 eller nyere** - kreves av selve CoreCycler-motoren (sp00n sin egen oppstartssjekk, se `CoreCycler/readme.txt`), i tillegg til av Managerens WinForms-grensesnitt. Er normalt allerede installert på en oppdatert Windows 10/11-maskin. Mangler det (f.eks. en svært minimal/Server Core-installasjon), kan det lastes ned her: [.NET Framework 4.8.1](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net481) / [.NET (nyere versjoner)](https://dotnet.microsoft.com/en-us/download/dotnet)
 
 ## Hvorfor dette finnes
 
