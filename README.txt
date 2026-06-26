@@ -1,5 +1,43 @@
-﻿Fiskum IT CoreCycler Manager v0.8.6
+﻿Fiskum IT CoreCycler Manager v0.8.7
 ============================================================
+
+Nyheter i v0.8.7
+----------------
+- Rettet at autologon ALDRI fungerte pa kontoer uten passord (sett pa
+  WANJA-GAMER): et forsok pa a lagre et tomt passord ble feilaktig
+  tolket som en feilet sletting av en LSA-secret som aldri har
+  eksistert. Hopper na ogsa over selve passord-prompten helt nar
+  kontoen bekreftet ikke har passord
+- Rettet at sluttrapport-popup/bekreftelsesrunde-sporsmal kom for
+  tidlig, og at autologon/autostart ble fjernet for tidlig, nar
+  "Aggressivt undervolt-sok" automatisk gikk videre til
+  "Stabilitetstest (auto-juster ved feil)" (sett pa NR-GAMER)
+- Rettet at Avansert-dialogen avhuket ALLE CPU-stottede tester fra
+  start pa en fersk installasjon - na er kun de stjernemerkede
+  (anbefalte) testene avhuket fra start
+- Rettet at tittelen i selve vinduet viste en hardkodet, utdatert
+  versjon. Versjonsnummeret er na flyttet til en liten, nedtonet
+  etikett i ovre hoyre hjorne
+- Rettet en UI-bug (sett pa NR-GAMER, 1440p) der en gra "blokk" la seg
+  nederst i vinduet etter at det ble krympet fra en lagret, storre
+  hoyde. "Siste CoreCycler-logg" blir na ogsa hoyere nar vinduet har
+  plass til det
+- Rettet at samling av loggfiler (Collect-FiskumITDiagnostics.ps1)
+  kunne feile med "samlingen hadde en fast storrelse"
+- Skjuler na cmd.exe-vinduet som tidligere dukket opp ved et
+  automatisk gjenopptak etter restart (kunne lukkes ved et uhell, og
+  dermed avslutte hele programmet)
+- "Handlinger" har na en "Verktoy..."-knapp (apne siste logg, apne
+  skrivebordsrapport, nullstill state, apne config-mappe, deaktiver
+  autologon) og en "Hjelp"-knapp med en innebygd bruksveiledning
+- "Automatisk gjenoppretting" har na "Aktiver"/"Deaktiver"-knapper i
+  stedet for to avhukinger
+- Testmodusene er omdopt for a vaere mer beskrivende: "Assistert
+  undervolting" -> "Aggressivt undervolt-sok", "Vanlig
+  stabilitetstest" -> "Stabilitetstest (auto-juster ved feil)"
+- CoreCyclers automatiske gjenopprettingspunkt (hver 24. time) heter
+  na "Fiskum IT - Automatic Test Mode" i stedet for "CoreCycler
+  Automatic Test Mode"
 
 Nyheter i v0.8.6
 ----------------

@@ -296,7 +296,11 @@ if (-not $sourceFolders -or $sourceFolders.Count -eq 0) {
     exit 1
 }
 
-$logFiles = Get-LogFilesFromFolders -Folders $sourceFolders
+# Fiskum IT: PowerShell "ruller ut" en returnert [List[T]] til en vanlig fast-storrelse
+# array nar den fanges opp slik - $logFiles.Add() under ville da feile med "samlingen
+# hadde en fast storrelse" (sett i praksis, se Feil-mappen). Tvinger den derfor tilbake
+# til en resizable liste her
+$logFiles = [System.Collections.Generic.List[object]]@(Get-LogFilesFromFolders -Folders $sourceFolders)
 
 # Fiskum IT: state.json (Manager\state.json) og skrivebordsrapporten ligger UTENFOR
 # Manager\logs/CoreCycler\logs, men er ofte akkurat det som trengs for aa diagnostisere en

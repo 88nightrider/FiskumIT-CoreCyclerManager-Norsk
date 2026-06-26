@@ -12263,7 +12263,7 @@ function Test-CreateNewSystemRestorePoint {
             Write-Text('Creating a new System Restore Point...')
             $timeString = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 
-            Checkpoint-Computer -Description ('CoreCycler Automatic Test Mode ' + $timeString) -RestorePointType MODIFY_SETTINGS
+            Checkpoint-Computer -Description ('Fiskum IT - Automatic Test Mode ' + $timeString) -RestorePointType MODIFY_SETTINGS
 
             Write-Text('System Restore Point created')
         }

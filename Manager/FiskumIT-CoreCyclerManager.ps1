@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.6'
+$ManagerVersion = '0.8.7'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -608,7 +608,15 @@ function Add-ManagerAutoStartTask {
             return
         }
 
-        $action    = New-ScheduledTaskAction -Execute $StartBatPath -WorkingDirectory $ManagerDir
+        # Fiskum IT (v0.8.7): kjorer powershell.exe DIREKTE med -WindowStyle Hidden her
+        # (i stedet for via $StartBatPath/cmd.exe) - et synlig cmd.exe-vindu som dukker opp
+        # ved et automatisk gjenopptak etter restart kan vaere "i veien" og bli lukket ved
+        # et uhell av brukeren, noe som lukker HELE Manager-prosessen (sett rapportert som
+        # et reelt problem). Den manuelle snarvei-oppstarten ($StartBatPath, brukt naar
+        # brukeren faktisk sitter ved skjermen) er UENDRET - logging/pause-on-error der er
+        # fortsatt verdifullt
+        $psArgument = "-WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgument -WorkingDirectory $ManagerDir
         $trigger   = New-ScheduledTaskTrigger -AtLogOn
         $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest
         $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
@@ -692,6 +700,16 @@ function Set-LsaPrivateData {
 
         if ($storeStatus -ne 0) {
             $win32Err = [FiskumIT.LsaSecrets]::LsaNtStatusToWinError($storeStatus)
+
+            # Fiskum IT (v0.8.7): et "slett secret"-kall (tom $Value, $dataPtr=NULL over) mot
+            # en secret som ALDRI har eksistert feiler med ERROR_FILE_NOT_FOUND (2) - det er
+            # likevel det ONSKEDE endepunktet (ingen secret = riktig for en konto UTEN
+            # passord). Sett pa WANJA-GAMER (passordlos konto): dette blokkerte autologon-
+            # oppsett HELT, og dermed ogsa auto-restart-ved-krasj, hver gang
+            if ([string]::IsNullOrEmpty($Value) -and $win32Err -eq 2) {
+                return $true
+            }
+
             Write-ManagerLog -Text "LsaStorePrivateData feilet for '$KeyName' (Win32-feilkode $win32Err)."
             return $false
         }
@@ -823,38 +841,45 @@ function Ensure-AutoLogonConfigured {
     }
 
     $harPassord = Test-CurrentUserHasPassword
-
-    if ($harPassord -eq $false) {
-        # Fiskum IT: ALDRI logg $env:USERNAME her - brukernavn/passord skal ikke kunne leses ut av loggen
-        Write-ManagerLog -Text "Brukerkontoen ser ikke ut til a ha passord satt - sporr likevel, siden autologon krever et lagret passord for a fungere palitelig."
-    }
-    elseif ($harPassord -eq 'Unknown') {
-        Write-ManagerLog -Text "Kunne ikke avgjore om brukerkontoen har passord (mulig Microsoft-/domenekonto) - sporr likevel."
-    }
-
-    $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Windows-autologon må konfigureres for at Manageren skal kunne gjenoppta automatisk etter en automatisk restart.`r`n`r`nSkriv inn PASSORDET for denne brukeren (IKKE PIN-koden/Windows Hello).`r`n`r`nHar kontoen ingen passord? Trykk OK uten å skrive noe."
-
-    if (-not $cred) {
-        Write-ManagerLog -Text "Bruker avbrøt autologon-oppsett. Auto-restart kan ikke fullføres trygt denne gangen."
-        return $false
-    }
-
     $brukernavn = $env:USERNAME
     $domene     = $env:USERDOMAIN
+    $plainPassword = ''
 
-    if ($cred.UserName -match '^(?<domene>[^\\]+)\\(?<bruker>.+)$') {
-        $domene     = $Matches['domene']
-        $brukernavn = $Matches['bruker']
+    if ($harPassord -eq $false) {
+        # Fiskum IT (v0.8.7): trygt a hoppe over selve passord-prompten her na som
+        # Set-LsaPrivateData korrekt handterer et tomt passord (se feilkode-2-fiksen der) -
+        # tidligere matte brukeren likevel trykke OK pa en prompt som ALLTID skulle vaere
+        # tom, hver gang Manageren startet pa en konto uten passord (f.eks. WANJA-GAMER)
+        # ALDRI logg $env:USERNAME her - brukernavn skal ikke kunne leses ut av loggen
+        Write-ManagerLog -Text "Brukerkontoen har ikke passord satt - hopper over passord-prompten og konfigurerer autologon direkte med et tomt passord."
     }
-    elseif ($cred.UserName) {
-        $brukernavn = $cred.UserName
+    else {
+        if ($harPassord -eq 'Unknown') {
+            Write-ManagerLog -Text "Kunne ikke avgjore om brukerkontoen har passord (mulig Microsoft-/domenekonto) - sporr likevel."
+        }
+
+        $cred = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Windows-autologon må konfigureres for at Manageren skal kunne gjenoppta automatisk etter en automatisk restart.`r`n`r`nSkriv inn PASSORDET for denne brukeren (IKKE PIN-koden/Windows Hello).`r`n`r`nHar kontoen ingen passord? Trykk OK uten å skrive noe."
+
+        if (-not $cred) {
+            Write-ManagerLog -Text "Bruker avbrøt autologon-oppsett. Auto-restart kan ikke fullføres trygt denne gangen."
+            return $false
+        }
+
+        if ($cred.UserName -match '^(?<domene>[^\\]+)\\(?<bruker>.+)$') {
+            $domene     = $Matches['domene']
+            $brukernavn = $Matches['bruker']
+        }
+        elseif ($cred.UserName) {
+            $brukernavn = $cred.UserName
+        }
+
+        $plainPassword = $cred.GetNetworkCredential().Password
     }
 
     if ($brukernavn -match '@') {
         Write-ManagerLog -Text "Denne brukeren ser ut til å være en Microsoft-konto. Autologon kan være mindre pålitelig, og fungerer ikke i det hele tatt med PIN-/Windows Hello-kun-pålogging."
     }
 
-    $plainPassword = $cred.GetNetworkCredential().Password
     $secretOk = Set-LsaPrivateData -KeyName 'DefaultPassword' -Value $plainPassword
     $plainPassword = $null
 
@@ -1646,9 +1671,9 @@ function Get-AssistertUndervoltingPlan {
     $stotte = Get-UndervoltStotteInfo
     $configFil = $(if ($stotte.Stottet -and $stotte.ConfigFil) { $stotte.ConfigFil } else { 'AssistedUndervolting_Ryzen.ini' })
     $navn = $(if ($stotte.Vendor -eq 'Intel') {
-        'Assistert undervolting (global spenningsforskyvning, 0 -> grense)'
+        'Aggressivt undervolt-søk (global spenningsforskyvning, 0 -> grense)'
     } else {
-        'Assistert undervolting (Curve Optimizer, 0 -> grense per kjerne)'
+        'Aggressivt undervolt-søk (Curve Optimizer, 0 -> grense per kjerne)'
     })
 
     return @(
@@ -2614,7 +2639,7 @@ function Start-BekreftelsesRundePrompt {
     }
 
     $result = [System.Windows.Forms.MessageBox]::Show(
-        "Vil du bekrefte de anbefalte verdiene (margin: $($SluttrapportInfo.Margin)) med en lengre stabilitetstest uten søk?`r`n`r`nDette kjører ""Vanlig stabilitetstest"" med de FASTE anbefalte verdiene (ikke et nytt søk), for å bekrefte at de er stabile.",
+        "Vil du bekrefte de anbefalte verdiene (margin: $($SluttrapportInfo.Margin)) med en lengre stabilitetstest uten søk?`r`n`r`nDette kjører ""Stabilitetstest (auto-juster ved feil)"" med de FASTE anbefalte verdiene (ikke et nytt søk), for å bekrefte at de er stabile.",
         'Fiskum IT CoreCycler Manager - bekreftelsesrunde',
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Question
@@ -2974,6 +2999,21 @@ function Update-AssistertUiEnabled {
     }
 }
 
+function Sync-GjenopprettingKnapper {
+    # Fiskum IT (v0.8.7): "Aktiver"/"Deaktiver" erstatter de to tidligere avhukingene -
+    # knappen som allerede matcher gjeldende tilstand vises nedtonet/deaktivert, samme
+    # visuelle monster brukt andre steder i UI for "dette er allerede valgt"
+    if (-not ($App.Ui.btnGjenopprettingAktiver -and $App.Ui.btnGjenopprettingDeaktiver)) {
+        return
+    }
+
+    $erAktivertNa = [bool]$App.State.autostartTask -and [bool]$App.State.autoRestartOnFeil
+    $erDeaktivertNa = (-not [bool]$App.State.autostartTask) -and (-not [bool]$App.State.autoRestartOnFeil)
+
+    $App.Ui.btnGjenopprettingAktiver.Enabled = -not $erAktivertNa
+    $App.Ui.btnGjenopprettingDeaktiver.Enabled = -not $erDeaktivertNa
+}
+
 function Switch-Modus {
     # Fiskum IT: bytter mellom "Stabilitet" (testplan.json) og "AssistertUndervolting"
     # (AssistedUndervolting_Ryzen.ini). Brukes bade fra radioknappene i UI og automatisk
@@ -2999,7 +3039,7 @@ function Switch-Modus {
     # "Assistert undervolting" pa en ustottet CPU uansett hvordan denne funksjonen kalles fra
     if ($NyModus -eq 'AssistertUndervolting' -and -not (Get-UndervoltStotteInfo).Stottet) {
         [System.Windows.Forms.MessageBox]::Show(
-            "Assistert undervolting er ikke støttet på denne CPU-en.`r`n`r`n$((Get-UndervoltStotteInfo).Forklaring)",
+            "Aggressivt undervolt-søk er ikke støttet på denne CPU-en.`r`n`r`n$((Get-UndervoltStotteInfo).Forklaring)",
             'Fiskum IT CoreCycler Manager',
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Warning
@@ -3878,11 +3918,19 @@ function Handle-ProcessFinished {
     $varVarAssistertUndervolting = ($App.State.modus -eq 'AssistertUndervolting')
     $varVarBekreftelseAktiv = $App.State.bekreftelseAktiv
 
+    # Fiskum IT (v0.8.7): fanges FOR selve bytte-blokken under endrer noe - brukes BADE til
+    # a styre bytte-blokken OG til a hindre completion-handlingen (popup/sluttrapport/
+    # Remove-AutoRecoveryInfrastructure) under fra a kjore FOR TIDLIG, midt i en kjede som
+    # IKKE er ferdig. Sett pa NR-GAMER 2026-06-26: uten dette kom popupen/bekreftelsesrunde-
+    # sporsmalet opp rett etter Assistert undervolting, OG autologon/autostart ble fjernet,
+    # selv om "Ga automatisk videre til Vanlig stabilitetstest" fortsatt skulle kjore
+    $skalAutoBytte = ($varFullfort -and $App.State.modus -eq 'AssistertUndervolting' -and $App.State.autoSwitchToStability)
+
     # Fiskum IT: nar Assistert undervolting er fullfort og auto-overgang er aktivert,
     # bytt modus til Vanlig stabilitetstest na - status blir da "Klar" igjen, slik at
     # AutoContinue-sjekken under starter den forste stabilitetstesten automatisk
-    if ($varFullfort -and $App.State.modus -eq 'AssistertUndervolting' -and $App.State.autoSwitchToStability) {
-        Write-ManagerLog -Text 'Assistert undervolting fullført. Bytter automatisk til Vanlig stabilitetstest.'
+    if ($skalAutoBytte) {
+        Write-ManagerLog -Text 'Aggressivt undervolt-søk fullført. Bytter automatisk til Stabilitetstest (auto-juster ved feil).'
         [void](Switch-Modus -NyModus 'Stabilitet')
 
         if ($App.Ui.radioStabilitet) {
@@ -3890,7 +3938,7 @@ function Handle-ProcessFinished {
         }
     }
 
-    if ($varFullfort) {
+    if ($varFullfort -and -not $skalAutoBytte) {
         if ($varVarBekreftelseAktiv) {
             # Fiskum IT (v0.8.2): dette var bekreftelsesrunden selv som fullforte (ikke et nytt
             # sok) - tydelig annerledes melding, og nullstill ALLTID flagget na som den er ferdig
@@ -3997,13 +4045,7 @@ function Reset-StateToStart {
         $App.Ui.chkAutoSwitch.Checked = [bool]$App.State.autoSwitchToStability
     }
 
-    if ($App.Ui.chkAutostart) {
-        $App.Ui.chkAutostart.Checked = [bool]$App.State.autostartTask
-    }
-
-    if ($App.Ui.chkAutoRestart) {
-        $App.Ui.chkAutoRestart.Checked = [bool]$App.State.autoRestartOnFeil
-    }
+    Sync-GjenopprettingKnapper
 
     if ($App.Ui.numRestartWaitMinutes) {
         $App.Ui.numRestartWaitMinutes.Value = [int]$App.State.restartWaitMinutes
@@ -4121,6 +4163,140 @@ function Show-AutoRestartCountdown {
     return ($result -eq [System.Windows.Forms.DialogResult]::OK)
 }
 
+function Show-VerktoyDialog {
+    # Fiskum IT (v0.8.7): samler de mindre brukte verktoy-/diagnostikk-handlingene (tidligere
+    # egne knapper direkte i "Handlinger") i et eget vindu, for a frigjore plass i den faste
+    # topp-sonen til den nye "Verktoy..."-knappen selv. Gjenbruker SAMME underliggende
+    # funksjoner som de gamle knappene kalte - ingen logikk er duplisert eller endret
+    $dlgPanelBackColor = [System.Drawing.Color]::FromArgb(30,33,40)
+    $dlgPanelForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
+
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = 'Verktøy'
+    $dlg.StartPosition = 'CenterParent'
+    $dlg.Size = New-Object System.Drawing.Size(360,330)
+    $dlg.MinimumSize = New-Object System.Drawing.Size(360,330)
+    $dlg.MaximumSize = New-Object System.Drawing.Size(360,330)
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
+    $dlg.ForeColor = $dlgPanelForeColor
+
+    $btnOpenLog = New-Button -Text 'Åpne siste logg' -X 20 -Y 20 -W 300
+    $btnOpenReport = New-Button -Text 'Åpne skrivebordsrapport' -X 20 -Y 64 -W 300
+    $btnResetState = New-Button -Text 'Nullstill state' -X 20 -Y 108 -W 300
+    $btnOpenConfigDir = New-Button -Text 'Åpne config-mappe' -X 20 -Y 152 -W 300
+
+    # Fiskum IT: tydelig egen farge (advarsel-aktig, ikke samme gronne som de andre) -
+    # dette er en litt mer "destruktiv" handling enn de over, og skal ikke se identisk ut
+    $btnDeaktiverAutologon = New-Button -Text 'Deaktiver automatisk pålogging (autologon)' -X 20 -Y 210 -W 300 -H 46
+    $btnDeaktiverAutologon.BackColor = [System.Drawing.Color]::FromArgb(255,167,38)
+
+    $dlg.Controls.AddRange(@(
+        $btnOpenLog,
+        $btnOpenReport,
+        $btnResetState,
+        $btnOpenConfigDir,
+        $btnDeaktiverAutologon
+    ))
+
+    $btnOpenLog.Add_Click({ Open-LatestLog })
+    $btnOpenReport.Add_Click({ Open-DesktopReport })
+    $btnResetState.Add_Click({ Reset-StateToStart })
+    $btnOpenConfigDir.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $ConfigDir) })
+
+    $btnDeaktiverAutologon.Add_Click({
+        if (-not [bool]$App.State.autoLogonConfiguredByUs) {
+            [System.Windows.Forms.MessageBox]::Show(
+                'Automatisk pålogging er ikke konfigurert av Manageren - ingenting å deaktivere.',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+            return
+        }
+
+        $svar = [System.Windows.Forms.MessageBox]::Show(
+            'Dette fjerner automatisk pålogging (autologon) som Manageren satte opp, og gjenoppretter forrige tilstand.',
+            'Fiskum IT CoreCycler Manager',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+
+        if ($svar -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Remove-AutoLogonIfConfiguredByUs -State $App.State
+
+            [System.Windows.Forms.MessageBox]::Show(
+                'Automatisk pålogging er nå deaktivert.',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+        }
+    })
+
+    [void]$dlg.ShowDialog()
+}
+
+function Show-BrukerveiledningDialog {
+    # Fiskum IT (v0.8.7): kort, innebygd bruksveiledning - et eget vindu med faner, ikke en
+    # tekstfil, slik at den er lett tilgjengelig direkte fra UI'et. Bevisst kort per fane
+    # ("informativt, men ikke drukne brukeren i tekst") - fullstendige detaljer star fortsatt
+    # i README.txt for de som vil vite mer
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = 'Fiskum IT CoreCycler Manager - bruksveiledning'
+    $dlg.StartPosition = 'CenterParent'
+    $dlg.Size = New-Object System.Drawing.Size(640,500)
+    $dlg.MinimumSize = New-Object System.Drawing.Size(640,500)
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
+    $dlg.ForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
+
+    $tabs = New-Object System.Windows.Forms.TabControl
+    $tabs.Location = New-Object System.Drawing.Point(12,12)
+    $tabs.Size = New-Object System.Drawing.Size(600,430)
+    $tabs.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+
+    $fanetekster = [ordered]@{
+        'Kom i gang' = "De to testmodusene (under ""Modus""):`r`n`r`n" +
+            "* Aggressivt undervolt-søk: søker oppover mot en stadig høyere (mer aggressiv) undervolting-verdi, for å finne grensen per kjerne.`r`n`r`n" +
+            "* Stabilitetstest (auto-juster ved feil): kjører faste/valgte verdier over en full testplan, og justerer automatisk NEDOVER (mindre aggressivt) hvis det oppstår en feil.`r`n`r`n" +
+            "Hurtigtaster: F5 = Start/Gjenoppta, Esc = Stopp test."
+        'Avansert og Verktøy' = """Avansert...""`r`n" +
+            "Velg hvilke tester (fra testplan.json) som skal kjøres i Stabilitetstest, og varighet per test (minutter, eller ""auto""). Stjernemerkede tester er anbefalt, og avhuket fra start på en fersk installasjon.`r`n`r`n" +
+            """Verktøy...""`r`n" +
+            "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon)."
+        'Automatisk gjenoppretting' = """Aktiver""/""Deaktiver"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
+            "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
+            "Feltet ""Minutter å vente etter restart før gjenopptak"" styrer hvor lenge Manageren venter etter en automatisk restart før testen gjenopptas."
+        'Resultater' = "Skrivebordsrapport: full oppsummering lagret på skrivebordet etter hver fullført test.`r`n`r`n" +
+            "Manager-logger: detaljert logg i Manager\logs\, nyttig for feilsøking (se også Verktøy -> Åpne siste logg).`r`n`r`n" +
+            "Sluttrapport (popup): vises når testen er HELT fullført, også etter en kjede med automatisk overgang fra Aggressivt undervolt-søk til Stabilitetstest.`r`n`r`n" +
+            "Bekreftelsesrunde: tilbys etter et fullført Aggressivt undervolt-søk - bekrefter de anbefalte verdiene med en lengre, fast stabilitetstest (uten nytt søk)."
+    }
+
+    foreach ($fane in $fanetekster.GetEnumerator()) {
+        $page = New-Object System.Windows.Forms.TabPage
+        $page.Text = $fane.Key
+        $page.BackColor = [System.Drawing.Color]::FromArgb(30,33,40)
+
+        $txt = New-Object System.Windows.Forms.RichTextBox
+        $txt.Location = New-Object System.Drawing.Point(8,8)
+        $txt.Size = New-Object System.Drawing.Size(568,376)
+        $txt.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+        $txt.BackColor = [System.Drawing.Color]::FromArgb(30,33,40)
+        $txt.ForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
+        $txt.BorderStyle = 'None'
+        $txt.ReadOnly = $true
+        $txt.Font = New-Object System.Drawing.Font('Segoe UI',9.5)
+        $txt.Text = $fane.Value
+
+        $page.Controls.Add($txt)
+        $tabs.Controls.Add($page)
+    }
+
+    $dlg.Controls.Add($tabs)
+
+    [void]$dlg.ShowDialog()
+}
+
 function Show-AvansertDialog {
     # Fiskum IT: "Avansert..." - velg hvilke av de 21 testene i testplan.json som skal
     # kjores i Vanlig stabilitetstest, og hvilken varighet (minutter, eller "auto") hver
@@ -4153,7 +4329,7 @@ function Show-AvansertDialog {
     $dlgPanelForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
 
     $dlg = New-Object System.Windows.Forms.Form
-    $dlg.Text = 'Avansert - velg tester og varighet (Vanlig stabilitetstest)'
+    $dlg.Text = 'Avansert - velg tester og varighet (Stabilitetstest, auto-juster ved feil)'
     $dlg.StartPosition = 'CenterParent'
     $dlg.Size = New-Object System.Drawing.Size(720,664)
     $dlg.MinimumSize = New-Object System.Drawing.Size(720,664)
@@ -4190,7 +4366,12 @@ function Show-AvansertDialog {
 
     foreach ($test in $allTests) {
         $eksisterendeEntry = $eksisterendeMap[[int]$test.id]
-        $erAktiv  = -not ($eksisterendeEntry -and $eksisterendeEntry.aktiv -eq $false)
+        # Fiskum IT (v0.8.7): pa en fersk installasjon (ingen lagret avansert-valg.json)
+        # ble ALLE CPU-stottede tester avhuket fra start - kun stjernen (under) var knyttet
+        # til standardAnbefalt. Faller na i stedet tilbake til standardAnbefalt nar det
+        # ikke finnes en lagret verdi, sa "avhuket" og "stjernemerket" stemmer overens for
+        # nye brukere. Eksisterende lagrede valg (avansert-valg.json) pavirkes IKKE
+        $erAktiv = if ($eksisterendeEntry) { $eksisterendeEntry.aktiv -ne $false } else { $test.standardAnbefalt -eq $true }
         # Fiskum IT: standard ("out of box") er 5 minutter, ikke "auto" - se Manager\config\avansert-valg.json
         $varighet = $(if ($eksisterendeEntry -and $eksisterendeEntry.varighet) { [string]$eksisterendeEntry.varighet } else { '5' })
         $stottet  = Test-StottetAvCpu -Krav $test.kreverInstruksjonssett
@@ -4356,7 +4537,7 @@ function Build-Ui {
     } catch {}
 
 
-    $title = New-Label -Text 'Fiskum IT CoreCycler Manager v0.8.2' -X 100 -Y 14 -W 800 -H 30 -Bold $true
+    $title = New-Label -Text 'Fiskum IT CoreCycler Manager' -X 100 -Y 14 -W 800 -H 30 -Bold $true
     $title.ForeColor = [System.Drawing.Color]::White
     $title.Font = New-Object System.Drawing.Font('Segoe UI',18,[System.Drawing.FontStyle]::Bold)
     $header.Controls.Add($title)
@@ -4364,6 +4545,17 @@ function Build-Ui {
     $subtitle = New-Label -Text 'Norsk kontrollflate for testplan, fremdrift, stopp og rapportering' -X 102 -Y 50 -W 900 -H 20
     $subtitle.ForeColor = [System.Drawing.Color]::White
     $header.Controls.Add($subtitle)
+
+    # Fiskum IT (v0.8.7): versjonsnummeret er flyttet ut av selve $title-teksten (der det
+    # tidligere var HARDKODET og dermed glemt oppdatert flere ganger - se $ManagerVersion)
+    # og inn i en egen, liten, nedtonet label i ovre hoyre hjorne - fortsatt synlig, men
+    # ikke konkurrerende med selve produktnavnet om oppmerksomheten
+    $lblVersion = New-Label -Text "v$ManagerVersion" -X 1140 -Y 10 -W 104 -H 18
+    $lblVersion.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+    $lblVersion.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+    $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(110,114,120)
+    $lblVersion.Font = New-Object System.Drawing.Font('Segoe UI',8)
+    $header.Controls.Add($lblVersion)
 
     $groupStatus = New-Object System.Windows.Forms.GroupBox
     $groupStatus.Text = 'Status'
@@ -4440,11 +4632,12 @@ function Build-Ui {
 
     $btnStart = New-Button -Text 'Start / Gjenoppta' -X 22 -Y 34 -W 170
     $btnStop = New-Button -Text 'Stopp test' -X 208 -Y 34 -W 140
-    $btnOpenLog = New-Button -Text 'Åpne siste logg' -X 364 -Y 34 -W 180
+    # Fiskum IT (v0.8.7): "Apne siste logg"/"Apne skrivebordsrapport"/"Nullstill state"/
+    # "Apne config-mappe" er flyttet inn i Show-VerktoyDialog (egen, mindre brukte
+    # verktoy/diagnostikk-handlinger samlet i et eget vindu) - se $btnVerktoy under
+    $btnVerktoy = New-Button -Text 'Verktøy...' -X 364 -Y 34 -W 180
 
-    $btnOpenReport = New-Button -Text 'Åpne skrivebordsrapport' -X 22 -Y 82 -W 240
-    $btnResetState = New-Button -Text 'Nullstill state' -X 278 -Y 82 -W 160
-    $btnOpenConfigDir = New-Button -Text 'Åpne config-mappe' -X 454 -Y 82 -W 130
+    $btnHjelp = New-Button -Text 'Hjelp' -X 22 -Y 82 -W 140
     $btnExit = New-Button -Text 'Avslutt' -X 454 -Y 130 -W 130
 
     $chkAutoContinue = New-Object System.Windows.Forms.CheckBox
@@ -4470,10 +4663,8 @@ function Build-Ui {
     $groupActions.Controls.AddRange(@(
         $btnStart,
         $btnStop,
-        $btnOpenLog,
-        $btnOpenReport,
-        $btnResetState,
-        $btnOpenConfigDir,
+        $btnVerktoy,
+        $btnHjelp,
         $btnExit,
         $chkAutoContinue,
         $lblHint,
@@ -4497,7 +4688,7 @@ function Build-Ui {
     $undervoltStotte = Get-UndervoltStotteInfo
 
     $radioAssistert = New-Object System.Windows.Forms.RadioButton
-    $radioAssistert.Text = 'Assistert undervolting (finn grensen per kjerne)'
+    $radioAssistert.Text = 'Aggressivt undervolt-søk (finn grensen per kjerne)'
     $radioAssistert.Location = New-Object System.Drawing.Point(18,26)
     $radioAssistert.Size = New-Object System.Drawing.Size(440,24)
     $radioAssistert.Font = New-Object System.Drawing.Font('Segoe UI',9)
@@ -4517,7 +4708,7 @@ function Build-Ui {
     }
 
     $radioStabilitet = New-Object System.Windows.Forms.RadioButton
-    $radioStabilitet.Text = 'Vanlig stabilitetstest (full testplan)'
+    $radioStabilitet.Text = 'Stabilitetstest (auto-juster ved feil)'
     $radioStabilitet.Location = New-Object System.Drawing.Point(18,54)
     $radioStabilitet.Size = New-Object System.Drawing.Size(440,24)
     $radioStabilitet.Font = New-Object System.Drawing.Font('Segoe UI',9)
@@ -4532,7 +4723,7 @@ function Build-Ui {
     # Windows uavhengig av FlatStyle/ForeColor). "Ikke relevant na" vises i stedet med en
     # dimmet ForeColor, satt av Update-AssistertUiEnabled like etter UI'et er bygget
     $chkAutoSwitch = New-Object System.Windows.Forms.CheckBox
-    $chkAutoSwitch.Text = 'Gå automatisk videre til Vanlig stabilitetstest når Assistert undervolting er fullført'
+    $chkAutoSwitch.Text = 'Gå automatisk videre til Stabilitetstest (auto-juster ved feil) når Aggressivt undervolt-søk er fullført'
     $chkAutoSwitch.Location = New-Object System.Drawing.Point(490,24)
     $chkAutoSwitch.Size = New-Object System.Drawing.Size(700,48)
     $chkAutoSwitch.Font = New-Object System.Drawing.Font('Segoe UI',9)
@@ -4541,7 +4732,7 @@ function Build-Ui {
     $chkAutoSwitch.ForeColor = $panelForeColor
     $chkAutoSwitch.FlatStyle = 'Flat'
 
-    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Vanlig stabilitetstest.' -X 490 -Y 76 -W 700 -H 22
+    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Stabilitetstest (auto-juster ved feil).' -X 490 -Y 76 -W 700 -H 22
 
     # Fiskum IT: marker hvilken CPU som er oppdaget og hvorfor Assistert undervolting
     # er (eller ikke er) tilgjengelig - se Get-UndervoltStotteInfo
@@ -4571,21 +4762,13 @@ function Build-Ui {
     $groupGjenoppretting.ForeColor = $panelForeColor
     $mainPanel.Controls.Add($groupGjenoppretting)
 
-    $chkAutostart = New-Object System.Windows.Forms.CheckBox
-    $chkAutostart.Text = 'Autostart Manageren ved innlogging (Scheduled Task)'
-    $chkAutostart.Location = New-Object System.Drawing.Point(18,28)
-    $chkAutostart.Size = New-Object System.Drawing.Size(560,24)
-    $chkAutostart.Font = New-Object System.Drawing.Font('Segoe UI',9)
-    $chkAutostart.ForeColor = $panelForeColor
-    $chkAutostart.FlatStyle = 'Flat'
-
-    $chkAutoRestart = New-Object System.Windows.Forms.CheckBox
-    $chkAutoRestart.Text = 'Auto-restart datamaskinen ved krasj/feil (krever Autostart)'
-    $chkAutoRestart.Location = New-Object System.Drawing.Point(18,56)
-    $chkAutoRestart.Size = New-Object System.Drawing.Size(560,24)
-    $chkAutoRestart.Font = New-Object System.Drawing.Font('Segoe UI',9)
-    $chkAutoRestart.ForeColor = $panelForeColor
-    $chkAutoRestart.FlatStyle = 'Flat'
+    # Fiskum IT (v0.8.7): erstatter de to tidligere avhukingene (autostart/auto-restart) -
+    # de styrte alltid de samme to State-feltene SAMTIDIG i praksis (se reverserings-
+    # logikken som tidligere lå i Add_CheckedChanged-handlerne under), sa to knapper som
+    # gjor det eksplisitt er enklere a forsta enn to uavhengige-utseende avhukinger som i
+    # praksis ikke kunne settes uavhengig av hverandre
+    $btnGjenopprettingAktiver = New-Button -Text 'Aktiver' -X 18 -Y 24 -W 160
+    $btnGjenopprettingDeaktiver = New-Button -Text 'Deaktiver' -X 188 -Y 24 -W 160
 
     $lblRestartWaitMinutes = New-Label -Text 'Minutter å vente etter restart før gjenopptak:' -X 18 -Y 86 -W 320 -H 22
 
@@ -4603,15 +4786,15 @@ function Build-Ui {
     $numRestartWaitMinutes.BackColor = $panelBackColor
     $numRestartWaitMinutes.ForeColor = $panelForeColor
 
-    $lblGjenopprettingHint = New-Label -Text 'Med auto-restart på: du blir spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når en feil oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
+    $lblGjenopprettingHint = New-Label -Text '"Aktiver" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
     $lblGjenopprettingHint.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
-    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Trykk bare OK uten å skrive noe. Husk: det er PASSORDET (ikke PIN-koden/Windows Hello) som skal fylles inn.' -X 18 -Y 134 -W 1170 -H 22
+    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 134 -W 1170 -H 22
     $lblGjenopprettingHint2.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupGjenoppretting.Controls.AddRange(@(
-        $chkAutostart,
-        $chkAutoRestart,
+        $btnGjenopprettingAktiver,
+        $btnGjenopprettingDeaktiver,
         $lblRestartWaitMinutes,
         $numRestartWaitMinutes,
         $lblGjenopprettingHint,
@@ -4658,6 +4841,11 @@ function Build-Ui {
     # Fiskum IT (v0.8.2): redusert fra 380 - na i en rullbar panel, sa dette er kun et
     # komfort-mal for standardvisningen, ikke en hard grense
     $groupLog.Size = New-Object System.Drawing.Size(1214,260)
+    # Fiskum IT (v0.8.7): siste gruppe i den rullbare panelen - forankret ogsa i bunnen
+    # (og txtLog under, forankret pa samme mate inni DENNE boksen) sa "Siste CoreCycler-
+    # logg" faktisk blir hoyere nar vinduet er hoyt, i stedet for a sta fast i 260px med
+    # tom plass under nar det er rom til mer
+    $groupLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $groupLog.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupLog.BackColor = $panelBackColor
     $groupLog.ForeColor = $panelForeColor
@@ -4671,6 +4859,7 @@ function Build-Ui {
     # Fiskum IT (v0.8.2): redusert fra 300 til 180 - matcher $groupLog sin nye, lavere
     # standardhoyde (260, var 380). Vinduet/panelen er na rullbar uansett
     $txtLog.Size = New-Object System.Drawing.Size(1178,180)
+    $txtLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $txtLog.BackColor = [System.Drawing.Color]::Black
     $txtLog.ReadOnly = $true
     $txtLog.Font = New-Object System.Drawing.Font('Consolas',9)
@@ -4682,6 +4871,8 @@ function Build-Ui {
     ))
 
     $App.Ui.Form = $form
+    $App.Ui.mainPanel = $mainPanel
+    $App.Ui.groupLog = $groupLog
     $App.Ui.chkAutoContinue = $chkAutoContinue
     $App.Ui.btnExit = $btnExit
     $App.Ui.lblStatusValue = $lblStatusValue
@@ -4699,8 +4890,8 @@ function Build-Ui {
     $App.Ui.radioStabilitet = $radioStabilitet
     $App.Ui.btnAvansert = $btnAvansert
     $App.Ui.chkAutoSwitch = $chkAutoSwitch
-    $App.Ui.chkAutostart = $chkAutostart
-    $App.Ui.chkAutoRestart = $chkAutoRestart
+    $App.Ui.btnGjenopprettingAktiver = $btnGjenopprettingAktiver
+    $App.Ui.btnGjenopprettingDeaktiver = $btnGjenopprettingDeaktiver
     $App.Ui.numRestartWaitMinutes = $numRestartWaitMinutes
     $App.Ui.btnSjekkOppdatering = $btnSjekkOppdatering
 
@@ -4714,20 +4905,12 @@ function Build-Ui {
         Refresh-UiState
     })
 
-    $btnOpenLog.Add_Click({
-        Open-LatestLog
+    $btnVerktoy.Add_Click({
+        Show-VerktoyDialog
     })
 
-    $btnOpenReport.Add_Click({
-        Open-DesktopReport
-    })
-
-    $btnResetState.Add_Click({
-        Reset-StateToStart
-    })
-
-    $btnOpenConfigDir.Add_Click({
-        Start-Process explorer.exe -ArgumentList ('"{0}"' -f $ConfigDir)
+    $btnHjelp.Add_Click({
+        Show-BrukerveiledningDialog
     })
 
     $btnExit.Add_Click({
@@ -4779,7 +4962,7 @@ function Build-Ui {
         param($sender, $eventArgs)
 
         $App.State.autoSwitchToStability = [bool]$sender.Checked
-        $App.State.sisteHendelse = "Auto-overgang til Vanlig stabilitetstest er satt til: $($App.State.autoSwitchToStability)"
+        $App.State.sisteHendelse = "Auto-overgang til Stabilitetstest (auto-juster ved feil) er satt til: $($App.State.autoSwitchToStability)"
 
         Add-History -State $App.State -Message $App.State.sisteHendelse
         Save-State -State $App.State
@@ -4789,48 +4972,24 @@ function Build-Ui {
         Update-AssistertUiEnabled
     })
 
-    $chkAutostart.Add_CheckedChanged({
-        param($sender, $eventArgs)
-
-        $App.State.autostartTask = [bool]$sender.Checked
-        $App.State.sisteHendelse = "Autostart ved innlogging er satt til: $($App.State.autostartTask)"
-
-        # Fiskum IT (v0.8.2): auto-restart uten autostart er meningslost (gjenopptak etter
-        # reboot krever at Manageren faktisk starter pa nytt) - reverser et forsok pa a
-        # skru av autostart mens auto-restart fortsatt star pa, samme monster som
-        # $radioAssistert sin egen reversering for en ustottet CPU (Switch-Modus)
-        if ((-not $App.State.autostartTask) -and $App.State.autoRestartOnFeil) {
-            $App.State.autostartTask = $true
-            $sender.Checked = $true
-        }
+    $btnGjenopprettingAktiver.Add_Click({
+        $App.State.autostartTask = $true
+        $App.State.autoRestartOnFeil = $true
+        $App.State.sisteHendelse = 'Automatisk gjenoppretting (autostart + auto-restart ved krasj/feil) er aktivert.'
 
         Add-History -State $App.State -Message $App.State.sisteHendelse
         Save-State -State $App.State
+        Sync-GjenopprettingKnapper
     })
 
-    $chkAutoRestart.Add_CheckedChanged({
-        param($sender, $eventArgs)
-
-        $App.State.autoRestartOnFeil = [bool]$sender.Checked
-
-        if ($App.State.autoRestartOnFeil -and -not $App.State.autostartTask) {
-            $App.State.autostartTask = $true
-
-            # Fiskum IT: IKKE referer den lokale $chkAutostart-variabelen her - denne
-            # script-blocken kjores av WinForms LANGT etter at Build-Ui (som
-            # $chkAutostart kun finnes lokalt inni) har returnert, og PowerShell fanger
-            # IKKE opp den lokale variabelen som en closure i en Add_CheckedChanged-
-            # handler. $App.Ui.chkAutostart er trygt, siden $App er i script-scope
-            # (samme monster brukt av alle andre handlere i denne filen)
-            if ($App.Ui.chkAutostart) {
-                $App.Ui.chkAutostart.Checked = $true
-            }
-        }
-
-        $App.State.sisteHendelse = "Auto-restart ved krasj/feil er satt til: $($App.State.autoRestartOnFeil)"
+    $btnGjenopprettingDeaktiver.Add_Click({
+        $App.State.autostartTask = $false
+        $App.State.autoRestartOnFeil = $false
+        $App.State.sisteHendelse = 'Automatisk gjenoppretting (autostart + auto-restart ved krasj/feil) er deaktivert.'
 
         Add-History -State $App.State -Message $App.State.sisteHendelse
         Save-State -State $App.State
+        Sync-GjenopprettingKnapper
     })
 
     $numRestartWaitMinutes.Add_ValueChanged({
@@ -4886,6 +5045,18 @@ function Build-Ui {
         elseif ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {
             Stop-CurrentRun
             Refresh-UiState
+        }
+    })
+
+    # Fiskum IT (v0.8.7): WinForms-kvirk - en Panel med AutoScroll=$true "huker seg fast"
+    # pa den STORSTE scroll-hoyden den noensinne har vist, og krymper IKKE selv tilbake nar
+    # vinduet (og dermed innholdet under, na ogsa forankret i bunnen - se $groupLog over)
+    # blir lavere igjen. Resultatet er en grA "blokk" nederst (sett pa NR-GAMER, 1440p ->
+    # krympet vindu etter en restart). Tvinger WinForms til a regne scroll-grensen pa nytt
+    # ved hvert resize, basert pa det faktiske bunnpunktet til siste synlige gruppe
+    $form.Add_Resize({
+        if ($App.Ui.mainPanel -and $App.Ui.groupLog) {
+            $App.Ui.mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($App.Ui.groupLog.Bottom + 16))
         }
     })
 
@@ -5043,7 +5214,7 @@ Write-ManagerLog -Text ('CPU-instruksjonssett oppdaget: AVX={0}, AVX2={1}, AVX51
 # samme info som vises kortere i "Modus"-panelet, men nyttig i sin helhet for feilsoking
 # (Collect-FiskumITDiagnostics) hvis en bruker rapporterer at funksjonen ikke virker som forventet
 $undervoltStotteStartup = Get-UndervoltStotteInfo
-Write-ManagerLog -Text ('Assistert undervolting-støtte: {0} (støttet={1}) - {2}' -f $undervoltStotteStartup.CpuNavn, $undervoltStotteStartup.Stottet, $undervoltStotteStartup.Forklaring)
+Write-ManagerLog -Text ('Aggressivt undervolt-søk-støtte: {0} (støttet={1}) - {2}' -f $undervoltStotteStartup.CpuNavn, $undervoltStotteStartup.Stottet, $undervoltStotteStartup.Forklaring)
 
 # Forsoek aa fylle "Offset-rekke" allerede ved oppstart (ryzen-smu-cli -> logg -> aktiv config)
 try {
@@ -5059,6 +5230,13 @@ Write-DesktopStatusReport -State $App.State -Plan $App.Plan
 
 $form = Build-Ui
 
+# Fiskum IT (v0.8.7): Add_Resize fyrer kun pa faktiske resize-hendelser, ikke ved selve
+# oppbyggingen - kall den samme AutoScrollMinSize-utregningen en gang her ogsa, sa en
+# gjenopprettet (lagret) vindusstorrelse far riktig scroll-grense fra forste oppstart
+if ($App.Ui.mainPanel -and $App.Ui.groupLog) {
+    $App.Ui.mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($App.Ui.groupLog.Bottom + 16))
+}
+
 # Fiskum IT: gjenspeil lastet state i modus-knappene/checkboksen, uten aa trigge Switch-Modus
 # (som ville nullstilt aktivTestId) - radioknappene speiler bare hva som allerede er lastet
 if ($App.State.modus -eq 'AssistertUndervolting' -and $App.Ui.radioAssistert) {
@@ -5072,13 +5250,7 @@ if ($App.Ui.chkAutoSwitch) {
     $App.Ui.chkAutoSwitch.Checked = [bool]$App.State.autoSwitchToStability
 }
 
-if ($App.Ui.chkAutostart) {
-    $App.Ui.chkAutostart.Checked = [bool]$App.State.autostartTask
-}
-
-if ($App.Ui.chkAutoRestart) {
-    $App.Ui.chkAutoRestart.Checked = [bool]$App.State.autoRestartOnFeil
-}
+Sync-GjenopprettingKnapper
 
 if ($App.Ui.numRestartWaitMinutes) {
     $App.Ui.numRestartWaitMinutes.Value = [int]$App.State.restartWaitMinutes
