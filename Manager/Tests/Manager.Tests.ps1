@@ -12,7 +12,7 @@
 
 $ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager.ps1'
 
-$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount')
+$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount', 'Get-YCruncherModusForCpu')
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ManagerScript, [ref]$null, [ref]$null)
 $funksjoner = $ast.FindAll({
@@ -255,5 +255,71 @@ Describe 'Get-CompletedRoundCount' {
     It 'returnerer Plan.Count nar status er Fullfort, uavhengig av siste ID' {
         $state = [pscustomobject]@{ status = 'Fullført'; sisteFullforteTestId = 14 }
         Get-CompletedRoundCount -Plan $plan -State $state | Should Be 5
+    }
+}
+
+Describe 'Get-YCruncherModusForCpu' {
+    # Fiskum IT (v0.8.7.2): regresjonstest for y-cruncher sin "auto"-modus-deteksjon, som
+    # har vist seg aa feile DETERMINISTISK pa minst en reell maskin (TEST-01, se Feil-mappens
+    # diagnostikk 2026-06-26) - Activate-TestConfig overstyrer na alltid "auto" med en av
+    # disse eksplisitte, dokumenterte modusstrengene i stedet
+    It 'returnerer Intel AVX512-modus for en Intel-CPU med AVX512' {
+        $stotte = [pscustomobject]@{ Vendor = 'Intel' }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $true }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '18-CNL ~ Shinoa'
+    }
+
+    It 'returnerer Intel AVX2-modus for en Intel-CPU uten AVX512' {
+        $stotte = [pscustomobject]@{ Vendor = 'Intel' }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '13-HSW ~ Airi'
+    }
+
+    It 'returnerer Intel AVX-modus for en Intel-CPU uten AVX2' {
+        $stotte = [pscustomobject]@{ Vendor = 'Intel' }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $false; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '11-SNB ~ Hina'
+    }
+
+    It 'returnerer Intel SSE-modus for en svaert gammel Intel-CPU uten AVX' {
+        $stotte = [pscustomobject]@{ Vendor = 'Intel' }
+        $caps = [pscustomobject]@{ AVX = $false; AVX2 = $false; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '04-P4P'
+    }
+
+    It 'returnerer Zen5-modus for AMD AVX512 med modellnummer >= 9000' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = 9950 }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $true }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '24-ZN5 ~ Komari'
+    }
+
+    It 'returnerer Zen4-modus for AMD AVX512 med modellnummer >= 7000 og < 9000' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = 7950 }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $true }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '22-ZN4 ~ Kizuna'
+    }
+
+    It 'returnerer Zen2/3-modus for AMD AVX512 med ukjent modellnummer (f.eks. Threadripper)' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = $null }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $true }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '19-ZN2 ~ Kagari'
+    }
+
+    It 'returnerer Zen2/3-modus for AMD AVX2 uten AVX512' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = 5700 }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $true; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '19-ZN2 ~ Kagari'
+    }
+
+    It 'returnerer AMD AVX-modus (Piledriver) for AMD med AVX men uten AVX2' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = $null }
+        $caps = [pscustomobject]@{ AVX = $true; AVX2 = $false; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '12-BD2 ~ Miyu'
+    }
+
+    It 'returnerer AMD SSE-modus (Athlon 64) for en svaert gammel AMD-CPU uten AVX' {
+        $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = $null }
+        $caps = [pscustomobject]@{ AVX = $false; AVX2 = $false; AVX512 = $false }
+        Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '05-A64 ~ Kasumi'
     }
 }

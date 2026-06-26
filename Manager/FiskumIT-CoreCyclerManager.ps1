@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.1'
+$ManagerVersion = '0.8.7.2'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -1834,6 +1834,73 @@ function Set-ConfigLine {
     Set-Content -LiteralPath $Path -Value $lines -Encoding UTF8
 }
 
+function Get-ConfigLineValue {
+    # Fiskum IT: leser en enkelt "key = value" fra en gitt ini-seksjon - skrive-motstykket
+    # til Set-ConfigLine over. Returnerer $null hvis seksjonen/nokkelen ikke finnes
+    param(
+        [Parameter(Mandatory)] [string]$Path,
+        [Parameter(Mandatory)] [string]$Section,
+        [Parameter(Mandatory)] [string]$Key
+    )
+
+    $inSection = $false
+
+    foreach ($line in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
+        if ($line -match '^\s*\[(?<s>[^\]]+)\]\s*$') {
+            $inSection = ($Matches['s'] -eq $Section)
+            continue
+        }
+
+        if ($inSection -and $line -match ('^\s*' + [regex]::Escape($Key) + '\s*=\s*(?<v>[^#]*)')) {
+            return $Matches['v'].Trim()
+        }
+    }
+
+    return $null
+}
+
+function Get-YCruncherModusForCpu {
+    # Fiskum IT (v0.8.7.2): returnerer en eksplisitt, dokumentert y-cruncher-modusstreng for
+    # den faktisk paaviste CPU-en, i stedet for "auto". y-cruncher sin egen auto-deteksjon
+    # (Test-WhichYCruncherBinary i script-corecycler.ps1) bruker en skjor DLL-injeksjons-
+    # teknikk (WriteConsoleToWriteFileWrapper/Detours) for aa lese hvilken binaer y-cruncher
+    # SELV velger - denne har vist seg aa feile DETERMINISTISK (ikke tilfeldig) pa minst en
+    # reell maskin (TEST-01, fersk Windows 11 Pro build 26200), UAVHENGIG av Windows
+    # Defender-unntak og fjernet "Mark of the Web"-blokkering - se Feil-mappens diagnostikk
+    # 2026-06-26. En feilet auto-deteksjon stopper HELE testen umiddelbart (Exit-WithFatalError,
+    # ingen retry/fallback i motoren), sa det er tryggere a alltid velge eksplisitt selv.
+    # Modusstrengene er hentet direkte fra y-cruncher sin egen dokumenterte tabell (se
+    # kommentaren over "mode = 00-x86" i CoreCycler\script-corecycler.ps1, linje ~518-533)
+    param(
+        [Parameter(Mandatory)] $UndervoltStotteInfo,
+        [Parameter(Mandatory)] $CpuInstruksjonssett
+    )
+
+    if ($UndervoltStotteInfo.Vendor -eq 'AMD') {
+        if ($CpuInstruksjonssett.AVX512) {
+            if ($UndervoltStotteInfo.AmdModellNummer -ge 9000) { return '24-ZN5 ~ Komari' }
+            if ($UndervoltStotteInfo.AmdModellNummer -ge 7000) { return '22-ZN4 ~ Kizuna' }
+
+            # Modellnummer ukjent (f.eks. Threadripper/EPYC, ikke gjenkjent av regex-en i
+            # Get-UndervoltStotteInfo) - "19-ZN2 ~ Kagari" er ifolge script-corecycler.ps1
+            # sin egen dokumentasjon "pretty good for testing stability" ogsaa for AVX512-CPUer
+            return '19-ZN2 ~ Kagari'
+        }
+
+        if ($CpuInstruksjonssett.AVX2) { return '19-ZN2 ~ Kagari' }
+        if ($CpuInstruksjonssett.AVX) { return '12-BD2 ~ Miyu' }
+
+        return '05-A64 ~ Kasumi'
+    }
+
+    # Intel (eller ukjent/uventet produsent - Intel-tabellen er en trygg fellesnevner her)
+    if ($CpuInstruksjonssett.AVX512) { return '18-CNL ~ Shinoa' }
+    if ($CpuInstruksjonssett.AVX2) { return '13-HSW ~ Airi' }
+    if ($CpuInstruksjonssett.AVX) { return '11-SNB ~ Hina' }
+
+    return '04-P4P'
+}
+
 function Activate-TestConfig {
     param(
         [Parameter(Mandatory)]
@@ -1852,6 +1919,21 @@ function Activate-TestConfig {
 
     Backup-CurrentCoreCyclerConfig
     Copy-Item -LiteralPath $source -Destination $CoreCyclerConfig -Force
+
+    # Fiskum IT (v0.8.7.2): overstyr ALLTID "[yCruncher] mode = auto" med en eksplisitt
+    # modusstreng for den faktisk paaviste CPU-en - se Get-YCruncherModusForCpu for hvorfor.
+    # Gjelder uavhengig av modus (Assistert undervolting/Vanlig stabilitetstest) og av hvilken
+    # spesifikk .ini som ble aktivert - patcher ingenting hvis testen ikke bruker y-cruncher,
+    # eller hvis mode allerede er satt til noe annet enn "auto"
+    $gjeldendeYCruncherModus = Get-ConfigLineValue -Path $CoreCyclerConfig -Section 'yCruncher' -Key 'mode'
+
+    if ($gjeldendeYCruncherModus -and $gjeldendeYCruncherModus.ToLowerInvariant() -eq 'auto') {
+        $stotteForYCruncher = Get-UndervoltStotteInfo
+        $ycruncherModus = Get-YCruncherModusForCpu -UndervoltStotteInfo $stotteForYCruncher -CpuInstruksjonssett (Get-CpuInstruksjonssett)
+
+        Set-ConfigLine -Path $CoreCyclerConfig -Section 'yCruncher' -Key 'mode' -Value $ycruncherModus
+        Write-ManagerLog -Text "Activate-TestConfig: satte y-cruncher-modus til '$ycruncherModus' (i stedet for 'auto') for $($stotteForYCruncher.CpuNavn)."
+    }
 
     if ($App.State.modus -eq 'AssistertUndervolting') {
         if ($ErGjenopptak) {
@@ -1878,28 +1960,6 @@ function Activate-TestConfig {
         if ($entry -and -not [string]::IsNullOrWhiteSpace([string]$entry.varighet)) {
             $runtimeValue = Get-RuntimePerCoreOverrideString -Varighet $entry.varighet
             Set-ConfigLine -Path $CoreCyclerConfig -Section 'General' -Key 'runtimePerCore' -Value $runtimeValue
-        }
-
-        # Fiskum IT (v0.8.2): for AVX512-y-cruncher-tester, overstyr filens egen "mode = auto"
-        # med en eksplisitt, bekreftet riktig modusstreng for AMD Zen4/Zen5 - gjenbruker
-        # modellnummeret fra Get-UndervoltStotteInfo (samme kilde som minValue-patchingen
-        # over for Assistert undervolting). Kun for AMD - se YCRUNCHER_AVX512_1.ini for
-        # hvorfor "auto" er en trygg nok fallback for Intel/usikre tilfeller
-        if ($Test.kreverInstruksjonssett -eq 'AVX512') {
-            $stotte = Get-UndervoltStotteInfo
-
-            if ($stotte.Vendor -eq 'AMD' -and $stotte.AmdModellNummer) {
-                $ycruncherMode = $(
-                    if ($stotte.AmdModellNummer -ge 9000) { '24-ZN5 ~ Komari' }
-                    elseif ($stotte.AmdModellNummer -ge 7000) { '22-ZN4 ~ Kizuna' }
-                    else { $null }
-                )
-
-                if ($ycruncherMode) {
-                    Set-ConfigLine -Path $CoreCyclerConfig -Section 'yCruncher' -Key 'mode' -Value $ycruncherMode
-                    Write-ManagerLog -Text "Activate-TestConfig: satte y-cruncher AVX512-modus til '$ycruncherMode' for $($stotte.CpuNavn)."
-                }
-            }
         }
 
         # Fiskum IT (v0.8.2): bekreftelsesrunde - bruk FASTE, margin-justerte verdier i stedet

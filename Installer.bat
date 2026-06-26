@@ -162,6 +162,22 @@ copy /Y "%DIAG_SOURCE_BAT%" "%TARGET_ROOT%\" >> "%LOG_FILE%" 2>&1
 if not exist "%TARGET_DIAG_BAT%" ( echo FEIL: Kopiering av diagnostikk-BAT feilet. & pause & exit /b 1 )
 
 REM ------------------------------------------------------------
+REM Fjern Windows-blokkering (Mark of the Web / Zone.Identifier)
+REM Fiskum IT (v0.8.7.2): filer som er lastet ned fra GitHub (zip) far et
+REM "denne filen kom fra internett"-merke (samme merke som fjernes ved a
+REM huke av "Fjern blokkering" under Egenskaper). Dette kan utlose ekstra
+REM SmartScreen-/sikkerhetsbegrensninger pa .ps1/.bat/.exe/.dll-filer -
+REM fjerner det derfor automatisk fra HELE installasjonsmappen her
+REM ------------------------------------------------------------
+echo Fjerner Windows-blokkering (Mark of the Web) fra installerte filer...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath '%TARGET_ROOT%' -Recurse -File | Unblock-File" >> "%LOG_FILE%" 2>&1
+if %ERRORLEVEL%==0 (
+    echo Blokkering fjernet.
+) else (
+    echo ADVARSEL: Kunne ikke fjerne blokkering automatisk - se loggen for detaljer.
+)
+
+REM ------------------------------------------------------------
 REM Windows Defender-unntak for C:\FiskumIT
 REM Fiskum IT (v0.8.7.1): CoreCycler-motoren bruker en DLL-injeksjonsteknikk
 REM (WriteConsoleToWriteFileWrapper/DetourCreateProcessWithDllEx) for aa lese

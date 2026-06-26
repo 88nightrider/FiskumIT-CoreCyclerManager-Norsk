@@ -1,5 +1,19 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.1
+﻿Fiskum IT CoreCycler Manager v0.8.7.2
 ============================================================
+
+Nyheter i v0.8.7.2
+-------------------
+- Installer.bat fjerner na automatisk Windows-blokkering ("Mark of the
+  Web"/Zone.Identifier - samme som "Fjern blokkering" under
+  Egenskaper) fra alle installerte filer
+- y-cruncher sin egen "auto"-modus-deteksjon viste seg aa feile
+  DETERMINISTISK pa minst en reell maskin (TEST-01), uavhengig av
+  Defender-unntaket i v0.8.7.1 og MOTW-fjerningen over. Manageren
+  overstyrer na ALLTID "[yCruncher] mode = auto" med en eksplisitt,
+  dokumentert modusstreng for den faktisk paaviste CPU-en (alle niva:
+  SSE/AVX/AVX2/AVX512, bade Intel og AMD) - gjelder alle test-configer,
+  ikke bare den kuraterte AVX512-testen som hadde delvis stotte for
+  dette tidligere. Ny Pester-dekning lagt til
 
 Nyheter i v0.8.7.1
 -------------------
