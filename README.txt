@@ -1,5 +1,14 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7
+﻿Fiskum IT CoreCycler Manager v0.8.7.1
 ============================================================
+
+Nyheter i v0.8.7.1
+-------------------
+- Installer.bat legger na automatisk til et Windows Defender-unntak
+  for "C:\FiskumIT" under installasjon. Dette reduserer risikoen for
+  at CoreCycler-motorens DLL-injeksjonsteknikk (brukt til a lese
+  y-cruncher sin konsoll-output ved automatisk binaervalg) blir
+  blokkert (sett pa TEST-01 i v0.8.7). Feiler stille med kun en
+  advarsel hvis Defender ikke er tilgjengelig/aktivt
 
 Nyheter i v0.8.7
 ----------------

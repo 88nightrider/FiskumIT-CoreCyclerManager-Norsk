@@ -162,6 +162,37 @@ copy /Y "%DIAG_SOURCE_BAT%" "%TARGET_ROOT%\" >> "%LOG_FILE%" 2>&1
 if not exist "%TARGET_DIAG_BAT%" ( echo FEIL: Kopiering av diagnostikk-BAT feilet. & pause & exit /b 1 )
 
 REM ------------------------------------------------------------
+REM Windows Defender-unntak for C:\FiskumIT
+REM Fiskum IT (v0.8.7.1): CoreCycler-motoren bruker en DLL-injeksjonsteknikk
+REM (WriteConsoleToWriteFileWrapper/DetourCreateProcessWithDllEx) for aa lese
+REM y-cruncher sin konsoll-output ved automatisk binaervalg - dette kan bli
+REM blokkert av Windows Defender, sett pa TEST-01 (y-cruncher klarte ikke
+REM aa velge test automatisk). Legger derfor til et unntak for HELE
+REM "C:\FiskumIT" her (dekker alle Fiskum IT-installasjoner under denne
+REM mappen) - feiler stille (kun en advarsel) hvis Defender ikke er
+REM tilgjengelig/aktiv (f.eks. tredjeparts antivirus), siden dette ikke er
+REM kritisk for resten av installasjonen
+REM ------------------------------------------------------------
+set "DEFENDER_PS1=%TEMP%\FiskumIT-DefenderExclusion.ps1"
+> "%DEFENDER_PS1%" echo try {
+>> "%DEFENDER_PS1%" echo     Add-MpPreference -ExclusionPath 'C:\FiskumIT' -ErrorAction Stop
+>> "%DEFENDER_PS1%" echo     Write-Output 'Windows Defender-unntak lagt til for C:\FiskumIT'
+>> "%DEFENDER_PS1%" echo     exit 0
+>> "%DEFENDER_PS1%" echo } catch {
+>> "%DEFENDER_PS1%" echo     Write-Output "Kunne ikke legge til Windows Defender-unntak: $($_.Exception.Message)"
+>> "%DEFENDER_PS1%" echo     exit 1
+>> "%DEFENDER_PS1%" echo }
+echo Legger til Windows Defender-unntak for C:\FiskumIT...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DEFENDER_PS1%" >> "%LOG_FILE%" 2>&1
+if %ERRORLEVEL%==0 (
+    echo Windows Defender-unntak lagt til.
+) else (
+    echo ADVARSEL: Kunne ikke legge til Windows Defender-unntak automatisk - se loggen for detaljer.
+    echo Du kan legge det til manuelt: Windows Sikkerhet, Virus- og trusselbeskyttelse, Unntak.
+)
+del /Q "%DEFENDER_PS1%" >nul 2>&1
+
+REM ------------------------------------------------------------
 REM Skrivebordssnarvei
 REM ------------------------------------------------------------
 > "%SHORTCUT_PS1%" echo $Desktop = [Environment]::GetFolderPath('Desktop')
