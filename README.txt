@@ -1,5 +1,23 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.2
+﻿Fiskum IT CoreCycler Manager v0.8.7.3
 ============================================================
+
+Nyheter i v0.8.7.3
+-------------------
+- Rettet "Fremdrift"-visningen for "Aggressivt undervolt-søk" nar
+  "Ga automatisk videre til Stabilitetstest" er pavhuket: viste
+  "0/1 tester" (kun selve soket) i stedet for hele den planlagte
+  kjeden (sok + de valgte stabilitetstestene)
+- Rettet tekstbryting i "Hjelp"-vinduet (teksten forsvant ut til
+  hoyre i stedet for a brytes til ny linje)
+- Fjernet den automatiske Windows Defender-unntaket fra Installer.bat
+  (apenhet/etterprovbarhet) - y-cruncher-fiksen i v0.8.7.2 gjorde
+  denne unodvendig uansett
+- "Sjekk etter oppdatering" viser na et eget vindu med endringsloggen
+  mellom din installerte versjon og siste tilgjengelige versjon (i
+  stedet for bare en lenke), samt en "Oppdater na"-knapp som laster
+  ned og installerer den nye versjonen automatisk via et nytt,
+  separat script (Update-FiskumITCoreCyclerManager.ps1) - fjerner
+  ogsa Windows-blokkering fra de nedlastede filene
 
 Nyheter i v0.8.7.2
 -------------------

@@ -236,7 +236,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.2'
+$ManagerVersion = '0.8.7.3'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -278,11 +278,163 @@ function Test-NyVersjonTilgjengelig {
     return $resultat
 }
 
+function Get-EndringsloggMellomVersjoner {
+    # Fiskum IT (v0.8.7.3): parser "Nyheter i vX.Y.Z"-seksjonene fra README.txt sin
+    # changelog, og returnerer KUN seksjonene som er NYERE enn $FraVersjon og opptil og
+    # MED $TilVersjon - brukt til a vise "hva er nytt siden DIN versjon" i
+    # Show-OppdateringTilgjengeligDialog, i stedet for bare en lenke til nedlastingssiden.
+    # Ren/testbar - selve nettverkshentingen ligger i Get-EndringsloggForOppdatering
+    param(
+        [Parameter(Mandatory)] [string]$ReadmeInnhold,
+        [Parameter(Mandatory)] [string]$FraVersjon,
+        [Parameter(Mandatory)] [string]$TilVersjon
+    )
+
+    $seksjoner = [regex]::Matches(
+        $ReadmeInnhold,
+        '(?ms)^Nyheter i v(?<ver>[\d.]+)\r?\n-+\r?\n(?<body>.*?)(?=^Nyheter i v[\d.]+\r?\n-+|\z)'
+    )
+
+    $fra = [version]$FraVersjon
+    $til = [version]$TilVersjon
+    $treff = New-Object System.Collections.Generic.List[string]
+
+    foreach ($seksjon in $seksjoner) {
+        $verStreng = $seksjon.Groups['ver'].Value
+        $ver = $null
+
+        try { $ver = [version]$verStreng } catch { continue }
+
+        if ($ver -gt $fra -and $ver -le $til) {
+            $treff.Add("Nyheter i v$($verStreng):`r`n" + $seksjon.Groups['body'].Value.Trim())
+        }
+    }
+
+    if ($treff.Count -eq 0) {
+        return 'Fant ingen detaljert endringslogg for denne oppdateringen.'
+    }
+
+    return ($treff -join "`r`n`r`n")
+}
+
+function Get-EndringsloggForOppdatering {
+    # Fiskum IT (v0.8.7.3): henter README.txt fra GitHub for den NYE versjonen (samme tag
+    # som ble funnet av Test-NyVersjonTilgjengelig) og parser ut endringsloggen mellom den
+    # installerte og den nye versjonen. Kaster ALDRI - en feilende nettverkshenting her
+    # skal ikke hindre selve oppdateringsdialogen fra a vises, bare endringsloggen i den
+    param(
+        [Parameter(Mandatory)] [string]$SisteVersjon
+    )
+
+    try {
+        $readmeUrl = "https://raw.githubusercontent.com/$GitHubRepo/v$SisteVersjon/README.txt"
+        $readmeInnhold = Invoke-RestMethod -Uri $readmeUrl -Headers @{ 'User-Agent' = 'FiskumIT-CoreCyclerManager' } -TimeoutSec 10
+
+        return Get-EndringsloggMellomVersjoner -ReadmeInnhold $readmeInnhold -FraVersjon $ManagerVersion -TilVersjon $SisteVersjon
+    }
+    catch {
+        Write-ManagerLog -Text "Kunne ikke hente endringslogg for oppdatering: $($_.Exception.Message)"
+        return 'Kunne ikke hente endringsloggen (ingen nettverkstilgang?). Se nedlastingssiden for detaljer.'
+    }
+}
+
+function Show-OppdateringTilgjengeligDialog {
+    # Fiskum IT (v0.8.7.3): viser endringsloggen mellom installert og siste versjon, samt
+    # knapper for a apne nedlastingssiden ELLER kjore en automatisk oppdatering direkte
+    # (se Update-FiskumITCoreCyclerManager.ps1 - en EGEN prosess, slik at Manageren kan
+    # lukke seg selv og la den oppdatere de na-ikke-lenger-kjorende filene)
+    param(
+        [Parameter(Mandatory)] $Resultat
+    )
+
+    $endringslogg = Get-EndringsloggForOppdatering -SisteVersjon $Resultat.SisteVersjon
+
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = 'Fiskum IT CoreCycler Manager - oppdatering tilgjengelig'
+    $dlg.StartPosition = 'CenterParent'
+    $dlg.Size = New-Object System.Drawing.Size(640,520)
+    $dlg.MinimumSize = New-Object System.Drawing.Size(640,420)
+    $dlg.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
+    $dlg.ForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
+
+    $lblTittel = New-Label -Text "Ny versjon tilgjengelig: v$($Resultat.SisteVersjon) (du har v$ManagerVersion)" -X 12 -Y 12 -W 600 -H 26 -Bold $true
+    $lblTittel.Font = New-Object System.Drawing.Font('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
+    $dlg.Controls.Add($lblTittel)
+
+    $txt = New-Object System.Windows.Forms.RichTextBox
+    $txt.Location = New-Object System.Drawing.Point(12,46)
+    $txt.Size = New-Object System.Drawing.Size(600,366)
+    $txt.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    $txt.BackColor = [System.Drawing.Color]::FromArgb(30,33,40)
+    $txt.ForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
+    $txt.BorderStyle = 'None'
+    $txt.ReadOnly = $true
+    # Fiskum IT: WordWrap=$true har INGEN effekt sa lenge ScrollBars tillater en
+    # horisontal scrollbar (standardverdien "Both") - se samme fiks i Show-BrukerveiledningDialog
+    $txt.WordWrap = $true
+    $txt.ScrollBars = 'Vertical'
+    $txt.Font = New-Object System.Drawing.Font('Consolas',9.5)
+    $txt.Text = $endringslogg
+    $dlg.Controls.Add($txt)
+
+    $btnOppdaterNa = New-Button -Text 'Oppdater nå' -X 12 -Y 424 -W 160 -H 36
+    $btnApneSide = New-Button -Text 'Åpne nedlastingssiden' -X 184 -Y 424 -W 200 -H 36
+    $btnLukk = New-Button -Text 'Lukk' -X 540 -Y 424 -W 88 -H 36
+
+    foreach ($btn in @($btnOppdaterNa, $btnApneSide, $btnLukk)) {
+        $btn.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
+    }
+    $btnLukk.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
+
+    $dlg.Controls.AddRange(@($btnOppdaterNa, $btnApneSide, $btnLukk))
+
+    $btnApneSide.Add_Click({ Start-Process $Resultat.Url }.GetNewClosure())
+    $btnLukk.Add_Click({ $dlg.Close() }.GetNewClosure())
+
+    $btnOppdaterNa.Add_Click({
+        if ($App.State.status -eq 'Kjører') {
+            $svarStopp = [System.Windows.Forms.MessageBox]::Show(
+                'En test kjører fortsatt. Den må stoppes før oppdateringen kan fortsette. Stoppe testen og fortsette med oppdateringen?',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+
+            if ($svarStopp -ne [System.Windows.Forms.DialogResult]::Yes) {
+                return
+            }
+
+            Stop-CurrentRun
+        }
+
+        $updaterPath = Join-Path $RootDir 'Update-FiskumITCoreCyclerManager.ps1'
+
+        if (-not (Test-Path -LiteralPath $updaterPath)) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Fant ikke oppdateringsverktøyet ($updaterPath). Bruk ""Åpne nedlastingssiden"" for å oppdatere manuelt i stedet.",
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            ) | Out-Null
+            return
+        }
+
+        Write-ManagerLog -Text 'Starter automatisk oppdatering (Update-FiskumITCoreCyclerManager.ps1) - lukker Manageren.'
+        Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$updaterPath`"")
+
+        $dlg.Close()
+        $App.Ui.Form.Close()
+    }.GetNewClosure())
+
+    [void]$dlg.ShowDialog()
+}
+
 function Show-NyVersjonTilgjengeligVarsel {
     # Fiskum IT (v0.8.4): delt mellom det automatiske oppstartssjekket og det manuelle
-    # "Sjekk etter oppdatering"-knappeklikket - oppdaterer knappen OG viser en popup med
-    # lenke til nedlastingssiden. Tidligere viste oppstartssjekket KUN en endret knappetekst
-    # ved et automatisk funn - lett a overse hvis brukeren ikke aktivt ser pa skjermen
+    # "Sjekk etter oppdatering"-knappeklikket - oppdaterer knappeteksten OG viser
+    # endringslogg + oppdateringsalternativer (se Show-OppdateringTilgjengeligDialog).
+    # Tidligere viste oppstartssjekket KUN en endret knappetekst ved et automatisk funn -
+    # lett a overse hvis brukeren ikke aktivt ser pa skjermen
     param(
         [Parameter(Mandatory)]
         $Resultat
@@ -293,16 +445,7 @@ function Show-NyVersjonTilgjengeligVarsel {
         $App.Ui.btnSjekkOppdatering.BackColor = [System.Drawing.Color]::FromArgb(255,193,7)
     }
 
-    $svar = [System.Windows.Forms.MessageBox]::Show(
-        "Ny versjon tilgjengelig: v$($Resultat.SisteVersjon) (du har v$ManagerVersion).`r`n`r`nÅpne nedlastingssiden?",
-        'Fiskum IT CoreCycler Manager',
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    )
-
-    if ($svar -eq [System.Windows.Forms.DialogResult]::Yes) {
-        Start-Process $Resultat.Url
-    }
+    Show-OppdateringTilgjengeligDialog -Resultat $Resultat
 }
 
 function Invoke-OppdateringssjekkVedOppstart {
@@ -3155,22 +3298,31 @@ function Refresh-UiState {
     $current = Get-CurrentTest -Plan $plan -State $state
     $next = Get-NextTest -Plan $plan -State $state
     $nextErEtterAutoOvergang = $false
+    $stabilitetsPlanLengdeForAutoOvergang = 0
 
     # Fiskum IT: i Assistert undervolting-modus er $plan kun ett syntetisk steg, sa
     # Get-NextTest finner aldri noe "neste" der - men hvis auto-overgang til Vanlig
     # stabilitetstest er avhuket, vet vi faktisk hva som skjer etterpa: forste aktive
     # test i Vanlig stabilitetstest (samme test Switch-Modus/Sync-AktivTestId velger)
-    if (-not $next -and $state.modus -eq 'AssistertUndervolting' -and $state.autoSwitchToStability) {
+    if ($state.modus -eq 'AssistertUndervolting' -and $state.autoSwitchToStability) {
         $stabilitetsPlan = @(Get-StabilitetsPlan)
+        $stabilitetsPlanLengdeForAutoOvergang = $stabilitetsPlan.Count
 
-        if ($stabilitetsPlan.Count -gt 0) {
+        if (-not $next -and $stabilitetsPlan.Count -gt 0) {
             $next = $stabilitetsPlan[0]
             $nextErEtterAutoOvergang = $true
         }
     }
 
     $completedRounds = Get-CompletedRoundCount -Plan $plan -State $state
-    $totalRounds = $plan.Count
+    # Fiskum IT (v0.8.7.3): mens Aggressivt undervolt-sok kjorer MED auto-overgang
+    # paavhuket, representerer fremdriften den HELE planlagte kjeden (soket + den
+    # kommende stabilitetstesten), ikke bare det ene syntetiske sok-steget - sett pa
+    # NR-GAMER/TEST-01: viste "0/1 tester" i stedet for f.eks. "0/7". Etter selve
+    # auto-overgangen (modus er da 'Stabilitet') teller den videre kun den nye,
+    # gjenvaerende stabilitetsplanen - samme oppforsel som en frittstaende
+    # stabilitetstest-kjoring uten noe forutgaende sok
+    $totalRounds = $plan.Count + $stabilitetsPlanLengdeForAutoOvergang
 
     $pct = if ($totalRounds -gt 0) {
         [math]::Floor(($completedRounds / $totalRounds) * 100)
@@ -4345,6 +4497,11 @@ function Show-BrukerveiledningDialog {
         $txt.ForeColor = [System.Drawing.Color]::FromArgb(225,225,225)
         $txt.BorderStyle = 'None'
         $txt.ReadOnly = $true
+        # Fiskum IT (v0.8.7.3): RichTextBox ignorerer WordWrap=$true sa lenge ScrollBars
+        # tillater EN horisontal scrollbar (standardverdien er "Both") - derav at teksten
+        # tidligere forsvant ut til høyre i stedet for å brytes til ny linje
+        $txt.WordWrap = $true
+        $txt.ScrollBars = 'Vertical'
         $txt.Font = New-Object System.Drawing.Font('Segoe UI',9.5)
         $txt.Text = $fane.Value
 

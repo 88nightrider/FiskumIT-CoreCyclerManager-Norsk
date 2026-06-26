@@ -17,6 +17,7 @@
 !/Collect-FiskumITDiagnostics.ps1
 !/Collect-FiskumITDiagnostics.bat
 !/Create-FiskumITDiagnosticsShortcut.ps1
+!/Update-FiskumITCoreCyclerManager.ps1
 !/Manager/
 !/CoreCycler/
 

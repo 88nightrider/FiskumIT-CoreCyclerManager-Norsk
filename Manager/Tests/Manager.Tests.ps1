@@ -12,7 +12,7 @@
 
 $ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager.ps1'
 
-$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount', 'Get-YCruncherModusForCpu')
+$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount', 'Get-YCruncherModusForCpu', 'Get-EndringsloggMellomVersjoner')
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ManagerScript, [ref]$null, [ref]$null)
 $funksjoner = $ast.FindAll({
@@ -321,5 +321,52 @@ Describe 'Get-YCruncherModusForCpu' {
         $stotte = [pscustomobject]@{ Vendor = 'AMD'; AmdModellNummer = $null }
         $caps = [pscustomobject]@{ AVX = $false; AVX2 = $false; AVX512 = $false }
         Get-YCruncherModusForCpu -UndervoltStotteInfo $stotte -CpuInstruksjonssett $caps | Should Be '05-A64 ~ Kasumi'
+    }
+}
+
+Describe 'Get-EndringsloggMellomVersjoner' {
+    # Fiskum IT (v0.8.7.3): bruker en SYNTETISK README-tekst (ikke den faktiske README.txt)
+    # sa testen ikke knekker hver gang changelogen oppdateres - kun selve parse-logikken
+    # testes her
+    $syntetiskReadme = @'
+Fiskum IT CoreCycler Manager v0.8.7.2
+============================================================
+
+Nyheter i v0.8.7.2
+-------------------
+- Tredje endring
+
+Nyheter i v0.8.7.1
+-------------------
+- Andre endring
+
+Nyheter i v0.8.7
+----------------
+- Forste endring
+
+Nyheter i v0.8.6
+----------------
+- En enda eldre endring
+'@
+
+    It 'returnerer kun seksjoner NYERE enn FraVersjon og OPPTIL OG MED TilVersjon' {
+        $resultat = Get-EndringsloggMellomVersjoner -ReadmeInnhold $syntetiskReadme -FraVersjon '0.8.7' -TilVersjon '0.8.7.2'
+        $resultat | Should Match 'Tredje endring'
+        $resultat | Should Match 'Andre endring'
+        $resultat | Should Not Match 'Forste endring'
+        $resultat | Should Not Match 'en enda eldre endring'
+    }
+
+    It 'returnerer alle seksjoner nyere enn en svaert gammel FraVersjon' {
+        $resultat = Get-EndringsloggMellomVersjoner -ReadmeInnhold $syntetiskReadme -FraVersjon '0.8.5' -TilVersjon '0.8.7.2'
+        $resultat | Should Match 'Tredje endring'
+        $resultat | Should Match 'Andre endring'
+        $resultat | Should Match 'Forste endring'
+        $resultat | Should Match 'En enda eldre endring'
+    }
+
+    It 'returnerer en fallback-tekst nar ingen seksjoner matcher' {
+        $resultat = Get-EndringsloggMellomVersjoner -ReadmeInnhold $syntetiskReadme -FraVersjon '0.8.7.2' -TilVersjon '0.8.7.2'
+        $resultat | Should Be 'Fant ingen detaljert endringslogg for denne oppdateringen.'
     }
 }

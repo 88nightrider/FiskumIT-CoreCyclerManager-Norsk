@@ -70,12 +70,14 @@ set "MANAGER_PS1_NAME=FiskumIT-CoreCyclerManager.ps1"
 set "START_BAT_NAME=Start-FiskumIT-CoreCyclerManager.bat"
 set "DIAG_PS1_NAME=Collect-FiskumITDiagnostics.ps1"
 set "DIAG_BAT_NAME=Collect-FiskumITDiagnostics.bat"
+set "UPDATE_PS1_NAME=Update-FiskumITCoreCyclerManager.ps1"
 set "ICON_NAME=FiskumIT-Logo.ico"
 
 set "TARGET_PS1=%TARGET_MANAGER%\%MANAGER_PS1_NAME%"
 set "START_BAT=%TARGET_MANAGER%\%START_BAT_NAME%"
 set "TARGET_DIAG_PS1=%TARGET_ROOT%\%DIAG_PS1_NAME%"
 set "TARGET_DIAG_BAT=%TARGET_ROOT%\%DIAG_BAT_NAME%"
+set "TARGET_UPDATE_PS1=%TARGET_ROOT%\%UPDATE_PS1_NAME%"
 set "TARGET_ICON=%TARGET_MANAGER%\%ICON_NAME%"
 
 set "SHORTCUT_NAME=Fiskum IT CoreCycler Manager.lnk"
@@ -128,6 +130,18 @@ if not exist "%DIAG_SOURCE_BAT%" (
     pause & exit /b 1
 )
 
+REM --- Robust oppdateringsscript source lookup (valgfritt - eldre nedlastinger har den
+REM     ikke ennaa, og en manglende oppdaterer skal ikke stoppe selve installasjonen) ---
+set "UPDATE_SOURCE_PS1=%SOURCE_ROOT%\%UPDATE_PS1_NAME%"
+
+if not exist "%UPDATE_SOURCE_PS1%" (
+    if exist "%~dp0%UPDATE_PS1_NAME%" (
+        set "UPDATE_SOURCE_PS1=%~dp0%UPDATE_PS1_NAME%"
+    ) else if exist "%~dp0..\%UPDATE_PS1_NAME%" (
+        set "UPDATE_SOURCE_PS1=%~dp0..\%UPDATE_PS1_NAME%"
+    )
+)
+
 REM ------------------------------------------------------------
 REM Kopier
 REM ------------------------------------------------------------
@@ -161,6 +175,11 @@ if not exist "%TARGET_DIAG_PS1%" ( echo FEIL: Kopiering av diagnostikk-PS1 feile
 copy /Y "%DIAG_SOURCE_BAT%" "%TARGET_ROOT%\" >> "%LOG_FILE%" 2>&1
 if not exist "%TARGET_DIAG_BAT%" ( echo FEIL: Kopiering av diagnostikk-BAT feilet. & pause & exit /b 1 )
 
+if exist "%UPDATE_SOURCE_PS1%" (
+    echo Kopierer oppdateringsverktoy...
+    copy /Y "%UPDATE_SOURCE_PS1%" "%TARGET_ROOT%\" >> "%LOG_FILE%" 2>&1
+)
+
 REM ------------------------------------------------------------
 REM Fjern Windows-blokkering (Mark of the Web / Zone.Identifier)
 REM Fiskum IT (v0.8.7.2): filer som er lastet ned fra GitHub (zip) far et
@@ -176,37 +195,6 @@ if %ERRORLEVEL%==0 (
 ) else (
     echo ADVARSEL: Kunne ikke fjerne blokkering automatisk - se loggen for detaljer.
 )
-
-REM ------------------------------------------------------------
-REM Windows Defender-unntak for C:\FiskumIT
-REM Fiskum IT (v0.8.7.1): CoreCycler-motoren bruker en DLL-injeksjonsteknikk
-REM (WriteConsoleToWriteFileWrapper/DetourCreateProcessWithDllEx) for aa lese
-REM y-cruncher sin konsoll-output ved automatisk binaervalg - dette kan bli
-REM blokkert av Windows Defender, sett pa TEST-01 (y-cruncher klarte ikke
-REM aa velge test automatisk). Legger derfor til et unntak for HELE
-REM "C:\FiskumIT" her (dekker alle Fiskum IT-installasjoner under denne
-REM mappen) - feiler stille (kun en advarsel) hvis Defender ikke er
-REM tilgjengelig/aktiv (f.eks. tredjeparts antivirus), siden dette ikke er
-REM kritisk for resten av installasjonen
-REM ------------------------------------------------------------
-set "DEFENDER_PS1=%TEMP%\FiskumIT-DefenderExclusion.ps1"
-> "%DEFENDER_PS1%" echo try {
->> "%DEFENDER_PS1%" echo     Add-MpPreference -ExclusionPath 'C:\FiskumIT' -ErrorAction Stop
->> "%DEFENDER_PS1%" echo     Write-Output 'Windows Defender-unntak lagt til for C:\FiskumIT'
->> "%DEFENDER_PS1%" echo     exit 0
->> "%DEFENDER_PS1%" echo } catch {
->> "%DEFENDER_PS1%" echo     Write-Output "Kunne ikke legge til Windows Defender-unntak: $($_.Exception.Message)"
->> "%DEFENDER_PS1%" echo     exit 1
->> "%DEFENDER_PS1%" echo }
-echo Legger til Windows Defender-unntak for C:\FiskumIT...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%DEFENDER_PS1%" >> "%LOG_FILE%" 2>&1
-if %ERRORLEVEL%==0 (
-    echo Windows Defender-unntak lagt til.
-) else (
-    echo ADVARSEL: Kunne ikke legge til Windows Defender-unntak automatisk - se loggen for detaljer.
-    echo Du kan legge det til manuelt: Windows Sikkerhet, Virus- og trusselbeskyttelse, Unntak.
-)
-del /Q "%DEFENDER_PS1%" >nul 2>&1
 
 REM ------------------------------------------------------------
 REM Skrivebordssnarvei
