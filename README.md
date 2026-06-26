@@ -12,6 +12,12 @@ CoreCycler selv er et rent kommandolinje-/konsoll-script. Denne Manageren legger
 
 > **Status:** se [Releases](https://github.com/88nightrider/FiskumIT-CoreCyclerManager-Norsk/releases) for siste versjon, eller [README.txt](README.txt) for full endringslogg per versjon. Manageren har en innebygd "Sjekk etter oppdatering"-knapp som sjekker direkte mot dette repoet.
 
+## Krav
+
+- Windows 10/11 (64-bit) - 32-bits Windows støttes ikke
+- Windows PowerShell 5.1 - følger med Windows som standard, ingen separat installasjon nødvendig
+- **.NET Framework** (kreves av PowerShell sitt WinForms-grensesnitt) - er normalt allerede installert på en oppdatert Windows 10/11-maskin. Mangler det (f.eks. en svært minimal/Server Core-installasjon), kan det lastes ned fra [Microsofts offisielle nedlastingsside](https://dotnet.microsoft.com/en-us/download/dotnet-framework)
+
 ## Hvorfor dette finnes
 
 CoreCycler er et kraftig verktøy, men er bygget for et engelsktalende, teknisk publikum som er komfortable med å lese rå konsolltekst og redigere `.ini`-filer manuelt. Fiskum IT bygde denne Manageren for å gjøre samme verktøy trygt brukbart for norske brukere uten den tekniske bakgrunnen - med fornuftige standardvalg, tydelige norske forklaringer i UI-et, og automatisk gjenoppretting hvis en undervoltet verdi skulle vise seg ustabil og krasje maskinen midt i en test.
