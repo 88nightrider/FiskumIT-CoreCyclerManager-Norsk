@@ -1,5 +1,5 @@
 <#
-Fiskum IT - Update-FiskumITCoreCyclerManager.ps1 (v0.8.7.3)
+Fiskum IT - Update-FiskumITCoreCyclerManager.ps1 (v0.8.7.7)
 
 Henter siste versjon av Fiskum IT CoreCycler Manager fra GitHub og installerer den ved a
 kjore Installer.bat fra den nedlastede versjonen - SAMME installasjonslogikk som en
@@ -75,10 +75,20 @@ try {
 
     Write-Host 'Oppdatering fullfort. Starter Manageren pa nytt...'
 
-    $startBatSti = 'C:\FiskumIT\CoreCyclerManager\Manager\Start-FiskumIT-CoreCyclerManager.bat'
+    $managerDir    = 'C:\FiskumIT\CoreCyclerManager\Manager'
+    $managerPs1Sti = Join-Path $managerDir 'FiskumIT-CoreCyclerManager.ps1'
 
-    if (Test-Path -LiteralPath $startBatSti) {
-        Start-Process -FilePath $startBatSti -WorkingDirectory (Split-Path -Parent $startBatSti)
+    if (Test-Path -LiteralPath $managerPs1Sti) {
+        # Fiskum IT (v0.8.7.7): kjorer powershell.exe DIREKTE med -WindowStyle Hidden - samme
+        # monster som Add-ManagerAutoStartTask i Manager-scriptet - i stedet for via
+        # Start-FiskumIT-CoreCyclerManager.bat/cmd.exe. Et synlig cmd.exe-vindu som blir
+        # liggende etter en automatisk oppdatering er forvirrende, og kan lukkes ved et
+        # uhell - det avslutter da HELE Manager-prosessen (samme rotarsak/fiks som
+        # cmd.exe-vinduet etter et automatisk gjenopptak etter restart, se
+        # Add-ManagerAutoStartTask)
+        Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+            '-WindowStyle', 'Hidden', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$managerPs1Sti`""
+        ) -WorkingDirectory $managerDir
     }
 }
 catch {

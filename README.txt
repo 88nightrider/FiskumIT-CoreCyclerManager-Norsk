@@ -1,5 +1,14 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.6
+﻿Fiskum IT CoreCycler Manager v0.8.7.7
 ============================================================
+
+Nyheter i v0.8.7.7
+-------------------
+- Rettet at et synlig cmd.exe-vindu ble liggende apent etter at Manageren
+  startet seg selv pa nytt etter en fullfort "Oppdater na"-oppdatering.
+  Samme rotarsak/fiks som cmd.exe-vinduet ved automatisk gjenopptak etter
+  restart (v0.8.7): Update-FiskumITCoreCyclerManager.ps1 startet
+  Manageren via Start-FiskumIT-CoreCyclerManager.bat (cmd.exe) i stedet
+  for powershell.exe -WindowStyle Hidden direkte
 
 Nyheter i v0.8.7.6
 -------------------
