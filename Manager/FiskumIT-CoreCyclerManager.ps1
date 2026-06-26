@@ -253,7 +253,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.4'
+$ManagerVersion = '0.8.7.5'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -1180,6 +1180,41 @@ function Remove-AutoLogonIfConfiguredByUs {
     $State.autoLogonConfiguredByUs = $false
     $State.autoLogonPriorState = $null
     Save-State -State $State
+}
+
+function Disable-AutoLogonForced {
+    # Fiskum IT (v0.8.7.5): skrur AV Windows-autologon UANSETT hvem/hva som satte den opp -
+    # i motsetning til Remove-AutoLogonIfConfiguredByUs (som ALDRI rorer en autologon
+    # Manageren ikke selv har sporet at den satte opp). Finnes for tilfeller der en eldre
+    # versjon av Manageren (uten sporing, eller der state.json siden er nullstilt/erstattet
+    # av en reinstallasjon) har latt en autologon-konfigurasjon sta igjen som dagens versjon
+    # ikke lenger "kjenner igjen" (sett pa NR-GAMER 2026-06-26 - matte fjernes manuelt der).
+    # Rorer KUN AutoAdminLogon-flagget (samme som netplwiz gjor naar du huker av/pa boksen) -
+    # lar DefaultUserName/DefaultDomainName sta urort, siden de er ufarlige uten flagget pa,
+    # og fjerner et eventuelt lagret LSA-secret-passord uavhengig av hvem som lagret det
+    param(
+        [Parameter(Mandatory)]
+        $State
+    )
+
+    $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+
+    try {
+        New-ItemProperty -Path $regPath -Name 'AutoAdminLogon' -PropertyType String -Value '0' -Force | Out-Null
+    }
+    catch {
+        Write-ManagerLog -Text "Feil under tvungen deaktivering av autologon: $($_.Exception.Message)"
+        return $false
+    }
+
+    Set-LsaPrivateData -KeyName 'DefaultPassword' -Value $null | Out-Null
+
+    $State.autoLogonConfiguredByUs = $false
+    $State.autoLogonPriorState = $null
+    Save-State -State $State
+
+    Write-ManagerLog -Text "Windows-autologon tvangsdeaktivert (uavhengig av hvem som satte den opp)."
+    return $true
 }
 
 function Remove-AutoRecoveryInfrastructure {
@@ -4461,9 +4496,9 @@ function Show-VerktoyDialog {
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text = 'Verktøy'
     $dlg.StartPosition = 'CenterParent'
-    $dlg.Size = New-Object System.Drawing.Size(360,330)
-    $dlg.MinimumSize = New-Object System.Drawing.Size(360,330)
-    $dlg.MaximumSize = New-Object System.Drawing.Size(360,330)
+    $dlg.Size = New-Object System.Drawing.Size(360,400)
+    $dlg.MinimumSize = New-Object System.Drawing.Size(360,400)
+    $dlg.MaximumSize = New-Object System.Drawing.Size(360,400)
     $dlg.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
     $dlg.ForeColor = $dlgPanelForeColor
 
@@ -4477,12 +4512,19 @@ function Show-VerktoyDialog {
     $btnDeaktiverAutologon = New-Button -Text 'Deaktiver automatisk pålogging (autologon)' -X 20 -Y 210 -W 300 -H 46
     $btnDeaktiverAutologon.BackColor = [System.Drawing.Color]::FromArgb(255,167,38)
 
+    # Fiskum IT (v0.8.7.5): tydelig EGEN, sterkere "fare"-farge - dette er en mer
+    # gjennomgripende handling enn knappen over (rorer autologon UANSETT hvem som satte
+    # den opp, ikke bare det Manageren selv sporer)
+    $btnTvingDeaktiverAutologon = New-Button -Text 'Tving deaktivering av autologon (uansett hvem som satte den opp)' -X 20 -Y 270 -W 300 -H 46
+    $btnTvingDeaktiverAutologon.BackColor = [System.Drawing.Color]::FromArgb(220,53,69)
+
     $dlg.Controls.AddRange(@(
         $btnOpenLog,
         $btnOpenReport,
         $btnResetState,
         $btnOpenConfigDir,
-        $btnDeaktiverAutologon
+        $btnDeaktiverAutologon,
+        $btnTvingDeaktiverAutologon
     ))
 
     $btnOpenLog.Add_Click({ Open-LatestLog })
@@ -4520,6 +4562,36 @@ function Show-VerktoyDialog {
         }
     })
 
+    $btnTvingDeaktiverAutologon.Add_Click({
+        $svar = [System.Windows.Forms.MessageBox]::Show(
+            "Dette skrur AV Windows-autologon helt, uavhengig av hva som satte den opp (f.eks. en eldre versjon av Manageren, eller et annet verktøy) - og fjerner et eventuelt lagret passord.`r`n`r`nBruk dette hvis ""Deaktiver automatisk pålogging"" sier at den ikke er konfigurert av Manageren, men autologon fortsatt er PÅ.`r`n`r`nFortsette?",
+            'Fiskum IT CoreCycler Manager',
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+
+        if ($svar -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return
+        }
+
+        if (Disable-AutoLogonForced -State $App.State) {
+            [System.Windows.Forms.MessageBox]::Show(
+                'Autologon er nå tvangsdeaktivert.',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            ) | Out-Null
+        }
+        else {
+            [System.Windows.Forms.MessageBox]::Show(
+                'Kunne ikke deaktivere autologon - se Manager-loggen for detaljer.',
+                'Fiskum IT CoreCycler Manager',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error
+            ) | Out-Null
+        }
+    })
+
     [void]$dlg.ShowDialog()
 }
 
@@ -4549,7 +4621,7 @@ function Show-BrukerveiledningDialog {
         'Avansert og Verktøy' = """Avansert...""`r`n" +
             "Velg hvilke tester (fra testplan.json) som skal kjøres i Stabilitetstest, og varighet per test (minutter, eller ""auto""). Stjernemerkede tester er anbefalt, og avhuket fra start på en fersk installasjon.`r`n`r`n" +
             """Verktøy...""`r`n" +
-            "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon)."
+            "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon). Den siste, røde knappen tvangsdeaktiverer autologon uavhengig av hvem som satte den opp - nyttig hvis en eldre versjon av Manageren (eller noe annet) har latt den stå igjen."
         'Automatisk gjenoppretting' = """Aktiv""/""Deaktivert"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
             "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
             "Feltet ""Minutter å vente etter restart før gjenopptak"" styrer hvor lenge Manageren venter etter en automatisk restart før testen gjenopptas."

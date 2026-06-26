@@ -1,5 +1,17 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.4
+﻿Fiskum IT CoreCycler Manager v0.8.7.5
 ============================================================
+
+Nyheter i v0.8.7.5
+-------------------
+- Ny knapp under "Verktoy...": "Tving deaktivering av autologon (uansett
+  hvem som satte den opp)". Den eksisterende "Deaktiver automatisk
+  palogging"-knappen rorer ALDRI en autologon Manageren ikke selv har
+  sporet at den satte opp (med vilje, for sikkerhets skyld) - dette
+  betydde at en autologon satt opp av en ELDRE versjon av Manageren (uten
+  sporing, eller der state.json siden er nullstilt/erstattet) matte
+  fjernes manuelt (sett pa NR-GAMER). Den nye knappen skrur av
+  AutoAdminLogon-flagget direkte (samme prinsipp som netplwiz) og fjerner
+  et eventuelt lagret passord, uansett opprinnelse
 
 Nyheter i v0.8.7.4
 -------------------
