@@ -1,5 +1,21 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.7
+﻿Fiskum IT CoreCycler Manager v0.8.7.8
 ============================================================
+
+Nyheter i v0.8.7.8
+-------------------
+- Rettet det gjenoppstaende "gra/mork blokk nederst i vinduet"-problemet
+  pa storre skjermoppløsninger (sett pa to skjermbilder fra "Feil"-
+  mappen) - v0.8.7-fiksen var IKKE tilstrekkelig. Bekreftet ved
+  diagnostikk under utvikling: "Siste CoreCycler-logg" (og selve den
+  rullbare hovedpanelen) sin Anchor=Bottom strekker IKKE hoyden palitelig
+  nar AutoScroll=$true er satt pa forelderen - bredden strekker fint,
+  men hoyden sitter fast pa design-tids-verdien, bade ved oppstart med
+  en lagret storre hoyde OG etter at vinduet senere krympes igjen (det
+  morke feltet la seg da OVER resten av innholdet i stedet for a
+  forsvinne). Begge nivaene (hovedpanelen og loggboksen i den) far na i
+  stedet hoyden sin satt EKSPLISITT via kode, uavhengig av Anchor, ved
+  hver oppstart og hvert resize. Bekreftet visuelt med skjermbilder bade
+  for en stor lagret vindusstorrelse OG etter en programmatisk krymping
 
 Nyheter i v0.8.7.7
 -------------------

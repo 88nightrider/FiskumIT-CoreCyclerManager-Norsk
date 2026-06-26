@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.7'
+$ManagerVersion = '0.8.7.8'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -5138,6 +5138,62 @@ function Show-AvansertDialog {
     [void]$dlg.ShowDialog()
 }
 
+function Update-MainPanelLayout {
+    # Fiskum IT (v0.8.7.8): eksplisitt, deterministisk utregning av "Siste CoreCycler-logg"
+    # ($groupLog) sin hoyde og $mainPanel sin AutoScrollMinSize - ERSTATTER det tidligere
+    # forsoket (v0.8.7) pa a la $groupLog sin EGEN Anchor=Bottom gjore jobben automatisk.
+    # Det forsoket viste seg IKKE a vaere palitelig i praksis (rapportert pa nytt pa en
+    # hoyere-opplosning-skjerm i v0.8.7.4, til og med ETTER v0.8.7-fiksen): et stort, mort
+    # felt kunne bli liggende nederst etter at vinduet ble apnet med en lagret, storre
+    # hoyde - og forsvant IKKE selv etter at vinduet ble krympet igjen, men la seg i stedet
+    # OVER resten av innholdet. Sannsynlig rotarsak: Anchor-marginer for et NESTET,
+    # AutoScroll-aktivert panel sin egen barn ($groupLog inni $mainPanel) avhenger av NAR i
+    # oppbyggingen selve anchoringen forst trer i kraft (kan fanges med feil margin hvis
+    # det skjer for $mainPanel selv har blitt strukket til sin endelige storrelse) - i
+    # tillegg til at WinForms generelt ikke alltid tvinger gjennom et fullstendig
+    # repaint/re-layout naar en AutoScrollMinSize blir SATT LAVERE enn forrige verdi.
+    #
+    # Regner na i stedet $groupLog sin hoyde direkte ut fra $mainPanel sin FAKTISKE,
+    # synlige klientstorrelse (IKKE avhengig av Anchor for selve hoyden - $groupLog er na
+    # kun Top/Left/Right-forankret, se Build-Ui), og tvinger en fullstendig
+    # re-layout+repaint hver gang. Kalles bade ved hvert resize OG en gang rett etter
+    # oppstart (se kallet etter Build-Ui)
+    if (-not ($App.Ui.mainPanel -and $App.Ui.groupLog)) {
+        return
+    }
+
+    # Fiskum IT (v0.8.7.8): tving en layout-omberegning av FORELDREN forst - $mainPanel sin
+    # egen Anchor-strekking relativt til $form kan ikke stoles pa a allerede ha kjort hvis
+    # dette kalles tidlig (f.eks. rett etter Build-Ui, FOR vinduet faktisk er vist) - uten
+    # dette kan $mainPanel.ClientSize fortsatt vaere den opprinnelige, smA design-tids-
+    # storrelsen, noe som ga akkurat samme "for lav hoyde"-symptom som selve Anchor-fiksen
+    # denne funksjonen skulle erstatte
+    $mainPanel = $App.Ui.mainPanel
+    $groupLog  = $App.Ui.groupLog
+
+    # Fiskum IT (v0.8.7.8): bekreftet ved diagnostikk under utvikling - $mainPanel sin EGEN
+    # Anchor=Bottom (relativt til $form) strekker IKKE hoyden, selv etter PerformLayout() og
+    # selv etter at vinduet faktisk er vist (Add_Shown). Bredden strekker korrekt (Anchor=
+    # Right virker fint), men hoyden sitter fast pa design-tids-verdien - et kjent
+    # WinForms-samspill der AutoScroll=$true forstyrrer normal Anchor-hoyde-resizing langs
+    # selve scroll-aksen. Setter derfor $mainPanel sin hoyde EKSPLISITT her ogsa (IKKE bare
+    # for $groupLog inni den), helt uavhengig av Anchor
+    if ($App.Ui.Form) {
+        $formHoyde = $App.Ui.Form.ClientSize.Height
+        $mainPanel.Size = New-Object System.Drawing.Size($mainPanel.Width, [Math]::Max(200, $formHoyde - $mainPanel.Top))
+    }
+
+    $minHoyde   = 150
+    $bunnMargin = 16
+    $nyHoyde    = [Math]::Max($minHoyde, $mainPanel.ClientSize.Height - $groupLog.Top - $bunnMargin)
+
+    $groupLog.Size = New-Object System.Drawing.Size($groupLog.Width, $nyHoyde)
+    $mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($groupLog.Bottom + $bunnMargin))
+
+    $mainPanel.PerformLayout()
+    $mainPanel.Invalidate($true)
+}
+
 function Build-Ui {
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Fiskum IT CoreCycler Manager v$ManagerVersion"
@@ -5251,7 +5307,10 @@ function Build-Ui {
     $mainPanel = New-Object System.Windows.Forms.Panel
     $mainPanel.Location = New-Object System.Drawing.Point(0,364)
     $mainPanel.Size = New-Object System.Drawing.Size(1260,536)
-    $mainPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    # Fiskum IT (v0.8.7.8): IKKE Anchor=Bottom her - bekreftet ved diagnostikk at dette IKKE
+    # strekker hoyden palitelig nar AutoScroll=$true (se Update-MainPanelLayout, som na
+    # setter hoyden eksplisitt i stedet, bade for denne og for $groupLog inni den)
+    $mainPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $mainPanel.AutoScroll = $true
     $mainPanel.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
     $form.Controls.Add($mainPanel)
@@ -5518,11 +5577,11 @@ function Build-Ui {
     # Fiskum IT (v0.8.2): redusert fra 380 - na i en rullbar panel, sa dette er kun et
     # komfort-mal for standardvisningen, ikke en hard grense
     $groupLog.Size = New-Object System.Drawing.Size(1214,260)
-    # Fiskum IT (v0.8.7): siste gruppe i den rullbare panelen - forankret ogsa i bunnen
-    # (og txtLog under, forankret pa samme mate inni DENNE boksen) sa "Siste CoreCycler-
-    # logg" faktisk blir hoyere nar vinduet er hoyt, i stedet for a sta fast i 260px med
-    # tom plass under nar det er rom til mer
-    $groupLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    # Fiskum IT (v0.8.7.8): IKKE lenger Anchor=Bottom her - se Update-MainPanelLayout for
+    # begrunnelsen (Anchor-basert hoyde-stretching av en NESTET, AutoScroll-aktivert
+    # forelder viste seg upalitelig i praksis - "Siste CoreCycler-logg" sin hoyde regnes na
+    # i stedet ut eksplisitt der, basert pa $mainPanel sin faktiske klientstorrelse)
+    $groupLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $groupLog.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupLog.BackColor = $panelBackColor
     $groupLog.ForeColor = $panelForeColor
@@ -5726,16 +5785,10 @@ function Build-Ui {
         }
     })
 
-    # Fiskum IT (v0.8.7): WinForms-kvirk - en Panel med AutoScroll=$true "huker seg fast"
-    # pa den STORSTE scroll-hoyden den noensinne har vist, og krymper IKKE selv tilbake nar
-    # vinduet (og dermed innholdet under, na ogsa forankret i bunnen - se $groupLog over)
-    # blir lavere igjen. Resultatet er en grA "blokk" nederst (sett pa NR-GAMER, 1440p ->
-    # krympet vindu etter en restart). Tvinger WinForms til a regne scroll-grensen pa nytt
-    # ved hvert resize, basert pa det faktiske bunnpunktet til siste synlige gruppe
+    # Fiskum IT (v0.8.7.8): se Update-MainPanelLayout - kalles ved hvert resize for a
+    # deterministisk regne ut "Siste CoreCycler-logg" sin hoyde og scroll-grensen pa nytt
     $form.Add_Resize({
-        if ($App.Ui.mainPanel -and $App.Ui.groupLog) {
-            $App.Ui.mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($App.Ui.groupLog.Bottom + 16))
-        }
+        Update-MainPanelLayout
     })
 
     $form.Add_FormClosing({
@@ -5908,12 +5961,11 @@ Write-DesktopStatusReport -State $App.State -Plan $App.Plan
 
 $form = Build-Ui
 
-# Fiskum IT (v0.8.7): Add_Resize fyrer kun pa faktiske resize-hendelser, ikke ved selve
-# oppbyggingen - kall den samme AutoScrollMinSize-utregningen en gang her ogsa, sa en
-# gjenopprettet (lagret) vindusstorrelse far riktig scroll-grense fra forste oppstart
-if ($App.Ui.mainPanel -and $App.Ui.groupLog) {
-    $App.Ui.mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($App.Ui.groupLog.Bottom + 16))
-}
+# Fiskum IT (v0.8.7.8): Add_Resize fyrer kun pa faktiske resize-hendelser, ikke ved selve
+# oppbyggingen - kall samme Update-MainPanelLayout en gang her ogsa, sa en gjenopprettet
+# (lagret) vindusstorrelse far riktig "Siste CoreCycler-logg"-hoyde/scroll-grense fra
+# forste oppstart, ikke bare ved et senere resize
+Update-MainPanelLayout
 
 # Fiskum IT: gjenspeil lastet state i modus-knappene/checkboksen, uten aa trigge Switch-Modus
 # (som ville nullstilt aktivTestId) - radioknappene speiler bare hva som allerede er lastet
@@ -5943,6 +5995,12 @@ Refresh-CoreCyclerLogView
 # slik at hovedvinduet faktisk er synlig FOR en eventuell "ny versjon"-popup vises - en
 # popup som dukker opp fra ingensteds for vinduet selv er synlig, er forvirrende
 $form.Add_Shown({
+    # Fiskum IT (v0.8.7.8): se Update-MainPanelLayout - garantert korrekt $mainPanel.ClientSize
+    # forst NA, etter at vinduet faktisk er vist/realisert (HandleCreated + forste layout-
+    # passering er garantert kjort pa dette punktet, i motsetning til kallet rett etter
+    # Build-Ui, som kjorer FOR selve visningen)
+    Update-MainPanelLayout
+
     Invoke-OppdateringssjekkVedOppstart -State $App.State
 })
 
