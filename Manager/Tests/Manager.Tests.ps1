@@ -1,4 +1,4 @@
-# Fiskum IT (v0.8.2): lett, isolert testsett for de mest rene/risikable logikkfunksjonene i
+﻿# Fiskum IT (v0.8.2): lett, isolert testsett for de mest rene/risikable logikkfunksjonene i
 # Manager-scriptet. Bruker Pester 3.4.0 (bundlet med Windows PowerShell 5.1 - IKKE oppgradert,
 # se begrunnelse i plan/README) sin eldre Describe/It/Should-syntaks.
 #
@@ -12,7 +12,7 @@
 
 $ManagerScript = Join-Path $PSScriptRoot '..\FiskumIT-CoreCyclerManager.ps1'
 
-$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount', 'Get-YCruncherModusForCpu', 'Get-EndringsloggMellomVersjoner')
+$funksjonsNavn = @('Get-PropertyNames', 'Get-UndervoltStotteInfo', 'Get-AnbefaltMargin', 'Test-NyVersjonTilgjengelig', 'Get-CompletedRoundCount', 'Get-YCruncherModusForCpu', 'Get-EndringsloggMellomVersjoner', 'Format-Varighet', 'Get-ConfigLineValue', 'Get-EstimertTestVarighetSekunder', 'Get-SokFremdriftTekst')
 
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($ManagerScript, [ref]$null, [ref]$null)
 $funksjoner = $ast.FindAll({
@@ -248,12 +248,12 @@ Describe 'Get-CompletedRoundCount' {
     }
 
     It 'teller POSISJONEN i $Plan, ikke selve test-ID-en, for et filtrert delsett' {
-        $state = [pscustomobject]@{ status = 'Kjører'; sisteFullforteTestId = 7 }
+        $state = [pscustomobject]@{ status = 'KjÃ¸rer'; sisteFullforteTestId = 7 }
         Get-CompletedRoundCount -Plan $plan -State $state | Should Be 2
     }
 
     It 'returnerer Plan.Count nar status er Fullfort, uavhengig av siste ID' {
-        $state = [pscustomobject]@{ status = 'Fullført'; sisteFullforteTestId = 14 }
+        $state = [pscustomobject]@{ status = 'FullfÃ¸rt'; sisteFullforteTestId = 14 }
         Get-CompletedRoundCount -Plan $plan -State $state | Should Be 5
     }
 }
@@ -368,5 +368,119 @@ Nyheter i v0.8.6
     It 'returnerer en fallback-tekst nar ingen seksjoner matcher' {
         $resultat = Get-EndringsloggMellomVersjoner -ReadmeInnhold $syntetiskReadme -FraVersjon '0.8.7.2' -TilVersjon '0.8.7.2'
         $resultat | Should Be 'Fant ingen detaljert endringslogg for denne oppdateringen.'
+    }
+}
+
+Describe 'Format-Varighet' {
+    It 'returnerer "<1 min" for under ett minutt' {
+        Format-Varighet -Sekunder 30 | Should Be '<1 min'
+    }
+
+    It 'returnerer kun minutter under en time' {
+        Format-Varighet -Sekunder 1500 | Should Be '25 min'
+    }
+
+    It 'returnerer timer og minutter over en time' {
+        Format-Varighet -Sekunder 9000 | Should Be '2t 30min'
+    }
+
+    It 'haandterer negative verdier som 0' {
+        Format-Varighet -Sekunder -100 | Should Be '<1 min'
+    }
+}
+
+Describe 'Get-EstimertTestVarighetSekunder' {
+    $midlertidigIniMappe = Join-Path ([System.IO.Path]::GetTempPath()) ("FiskumIT-ManagerTests-Ini-{0}" -f ([Guid]::NewGuid()))
+    New-Item -ItemType Directory -Path $midlertidigIniMappe -Force | Out-Null
+
+    It 'parser "5m" som 300 sekunder' {
+        $iniPath = Join-Path $midlertidigIniMappe 'fastimer.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'runtimePerCore = 5m') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be 300
+    }
+
+    It 'parser et rent sekundtall' {
+        $iniPath = Join-Path $midlertidigIniMappe 'sekunder.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'runtimePerCore = 45') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be 45
+    }
+
+    It 'parser "1h30m" som timer+minutter' {
+        $iniPath = Join-Path $midlertidigIniMappe 'timer.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'runtimePerCore = 1h30m') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be 5400
+    }
+
+    It 'beregner "auto" for yCruncher fra tests+testDuration (samme formel som motoren)' {
+        $iniPath = Join-Path $midlertidigIniMappe 'auto.ini'
+        Set-Content -LiteralPath $iniPath -Value @(
+            '[General]',
+            'runtimePerCore = auto',
+            'suspendPeriodically = 1',
+            '[yCruncher]',
+            'tests = SFTv4, FFTv4, N63',
+            'testDuration = 20',
+            '[Debug]',
+            'tickInterval = 10',
+            'suspensionTime = 1000'
+        ) -Encoding UTF8
+
+        # oneRunLength = 3*20 = 60. suspendedTime = 1*60/10*(1000/1000) = 6. bufferTime = 60*0.05 = 3. Total = 69
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be 69
+    }
+
+    It 'returnerer $null nar runtimePerCore mangler' {
+        $iniPath = Join-Path $midlertidigIniMappe 'tom.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'stressTestProgram = PRIME95') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be $null
+    }
+
+    Remove-Item -LiteralPath $midlertidigIniMappe -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Describe 'Get-SokFremdriftTekst' {
+    $na = [DateTime]::Parse('2026-06-26T12:00:00Z', $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+
+    It 'viser "ikke startet" nar assistertSokStartTid er tom' {
+        $state = [pscustomobject]@{ assistertSokStartTid = ''; laasteKjerner = [pscustomobject]@{} }
+        $stotte = [pscustomobject]@{ Vendor = 'AMD' }
+        Get-SokFremdriftTekst -State $state -Stotte $stotte -AntallKjerner 8 -Na $na | Should Be 'Forløpt tid: ikke startet ennå'
+    }
+
+    It 'viser kun forlopt tid for Intel (ingen "neste kjerne")' {
+        $state = [pscustomobject]@{ assistertSokStartTid = '2026-06-26T11:30:00Z'; laasteKjerner = [pscustomobject]@{} }
+        $stotte = [pscustomobject]@{ Vendor = 'Intel' }
+        $resultat = Get-SokFremdriftTekst -State $state -Stotte $stotte -AntallKjerner 8 -Na $na
+        $resultat | Should Match '^Forløpt tid: 30 min'
+        $resultat | Should Match 'estimat ikke mulig'
+    }
+
+    It 'viser "estimat kommer etter forste laste kjerne" for AMD uten laste kjerner enda' {
+        $state = [pscustomobject]@{ assistertSokStartTid = '2026-06-26T11:50:00Z'; laasteKjerner = [pscustomobject]@{} }
+        $stotte = [pscustomobject]@{ Vendor = 'AMD' }
+        $resultat = Get-SokFremdriftTekst -State $state -Stotte $stotte -AntallKjerner 8 -Na $na
+        $resultat | Should Match 'estimat kommer etter'
+    }
+
+    It 'beregner snitt-basert anslag for AMD med noen laste kjerner' {
+        # 40 minutter forlopt, 2 kjerner last -> snitt 20 min/kjerne, 6 gjenstaende -> 120 min estimert
+        $state = [pscustomobject]@{
+            assistertSokStartTid = '2026-06-26T11:20:00Z'
+            laasteKjerner = [pscustomobject]@{ '0' = -8; '1' = -6 }
+        }
+        $stotte = [pscustomobject]@{ Vendor = 'AMD' }
+        $resultat = Get-SokFremdriftTekst -State $state -Stotte $stotte -AntallKjerner 8 -Na $na
+        $resultat | Should Match '2/8 kjerner låst'
+        $resultat | Should Match '2t 0min'
+    }
+
+    It 'viser "alle kjerner last" nar antallLaaste >= AntallKjerner' {
+        $state = [pscustomobject]@{
+            assistertSokStartTid = '2026-06-26T11:00:00Z'
+            laasteKjerner = [pscustomobject]@{ '0' = -8; '1' = -6 }
+        }
+        $stotte = [pscustomobject]@{ Vendor = 'AMD' }
+        $resultat = Get-SokFremdriftTekst -State $state -Stotte $stotte -AntallKjerner 2 -Na $na
+        $resultat | Should Match 'alle kjerner låst'
     }
 }

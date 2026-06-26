@@ -1,5 +1,21 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.5
+﻿Fiskum IT CoreCycler Manager v0.8.7.6
 ============================================================
+
+Nyheter i v0.8.7.6
+-------------------
+- "Fremdrift" viser na et ca. tidsestimat:
+  - Stabilitetstest (auto-juster ved feil): en ekte beregning ("Estimert
+    total tid"/"Estimert tid igjen"), lest fra hver valgte tests egen
+    config (runtimePerCore/maxIterations) * antall fysiske kjerner. Samme
+    formel som motoren selv bruker for yCruncher "auto"-varighet
+  - Aggressivt undervolt-sok: en PRESIS forhandsberegning er IKKE mulig
+    her (sok-dybden, altsa antall steg til feil, er ukjent pa forhand -
+    bekreftet ved gjennomgang av sp00n sin motorkode). Viser i stedet et
+    LEVENDE anslag som forbedres etter hvert som flere kjerner faktisk
+    last: pa AMD (ekte per-kjerne-sok) et snitt-basert anslag for
+    gjenvaerende kjerner, pa Intel (EN delt verdi for ALLE kjerner
+    samtidig - soket avsluttes ved forste feil, det finnes ingen "neste
+    kjerne") kun forlopt tid, siden et anslag der ville vaert misvisende
 
 Nyheter i v0.8.7.5
 -------------------

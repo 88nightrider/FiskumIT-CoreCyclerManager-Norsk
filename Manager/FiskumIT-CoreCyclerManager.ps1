@@ -97,6 +97,7 @@ Add-Type -Namespace FiskumIT -Name LogonCheck -MemberDefinition '
 # om samme StrictMode-fallgruve for JSON-objekt-egenskaper)
 $Script:CpuInstruksjonssettCache = $null
 $Script:UndervoltStotteCache = $null
+$Script:AntallFysiskeKjernerCache = $null
 # Fiskum IT: forrige innhold i "Siste CoreCycler-logg" - se Set-LiveLogView. Lar oss hoppe
 # over en hel Clear()+ombygging (og dermed flimringen den forarsaker) pa tick-er der
 # INGENTING nytt faktisk har skjedd i loggen, som er de fleste - CoreCycler logger ikke
@@ -253,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.5'
+$ManagerVersion = '0.8.7.6'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -2092,6 +2093,271 @@ function Get-ConfigLineValue {
     return $null
 }
 
+function Format-Varighet {
+    # Fiskum IT (v0.8.7.6): formaterer et antall sekunder til en kort, lesbar norsk streng
+    # for tidsestimatene i "Fremdrift" - se Get-EstimertStabilitetstestVarighetSekunder/
+    # Get-EstimertTidIgjenSekunder
+    param(
+        [Parameter(Mandatory)] [double]$Sekunder
+    )
+
+    if ($Sekunder -lt 0) {
+        $Sekunder = 0
+    }
+
+    $totalMinutter = [int][math]::Round($Sekunder / 60)
+
+    if ($totalMinutter -lt 1) {
+        return '<1 min'
+    }
+
+    $timer = [int][math]::Floor($totalMinutter / 60)
+    $minutter = $totalMinutter % 60
+
+    if ($timer -gt 0) {
+        return ('{0}t {1}min' -f $timer, $minutter)
+    }
+
+    return ('{0} min' -f $minutter)
+}
+
+function Get-EstimertTestVarighetSekunder {
+    # Fiskum IT (v0.8.7.6): estimert varighet (sekunder) for EN kjernes gjennomgang av EN
+    # testrunde (1 maxIterations-runde), lest fra testens egen config.ini - samme
+    # "runtimePerCore"-format som motoren selv parser (sekunder/minutter/timer, f.eks. "5m"),
+    # se script-corecycler.ps1 sin parsing av "runtimePerCore" for samme regex-logikk.
+    #
+    # "auto" stottes KUN for yCruncher her (de to AssistedUndervolting-profilene er de eneste
+    # configene i dette prosjektet som bruker "auto") - reproduserer motorens egen
+    # Get-EstimatedYCruncherRuntimePerCore-formel (script-corecycler.ps1): antall valgte
+    # deltester * testDuration, pluss et anslag for periodisk suspendering og en 5%-buffer.
+    # Returnerer $null hvis verdien ikke kan beregnes (i stedet for a gjette) - kalleren
+    # hopper da over denne testen i totalsummen, sa estimatet forblir aerlig "ca."
+    param(
+        [Parameter(Mandatory)] [string]$ConfigPath
+    )
+
+    $runtimeRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'General' -Key 'runtimePerCore'
+
+    if ([string]::IsNullOrWhiteSpace($runtimeRaw)) {
+        return $null
+    }
+
+    $runtimeRaw = $runtimeRaw.Trim().ToLowerInvariant()
+
+    if ($runtimeRaw -eq 'auto') {
+        $testsRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'yCruncher' -Key 'tests'
+        $testDurationRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'yCruncher' -Key 'testDuration'
+
+        if ([string]::IsNullOrWhiteSpace($testsRaw) -or [string]::IsNullOrWhiteSpace($testDurationRaw)) {
+            return $null
+        }
+
+        $antallTester = @($testsRaw -split ',' | Where-Object { $_.Trim() }).Count
+        $testDuration = [double]$testDurationRaw
+        $oneRunLength = $antallTester * $testDuration
+
+        $suspendPeriodicallyRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'General' -Key 'suspendPeriodically'
+        $tickIntervalRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'Debug' -Key 'tickInterval'
+        $suspensionTimeRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'Debug' -Key 'suspensionTime'
+
+        $suspendetTid = 0
+        if ($suspendPeriodicallyRaw -and $tickIntervalRaw -and $suspensionTimeRaw -and [double]$tickIntervalRaw -gt 0 -and [double]$suspensionTimeRaw -gt 0) {
+            $suspendetTid = [double]$suspendPeriodicallyRaw * $oneRunLength / [double]$tickIntervalRaw * (1000 / [double]$suspensionTimeRaw)
+        }
+
+        $bufferTid = $oneRunLength * 0.05
+
+        return [math]::Ceiling($oneRunLength + $suspendetTid + $bufferTid)
+    }
+
+    if ($runtimeRaw -match '[hms]') {
+        $m = [regex]::Match($runtimeRaw, '((?<hours>\d+(\.\d+)?)h)?\s*((?<minutes>\d+(\.\d+)?)m)?\s*((?<seconds>\d+(\.\d+)?)s)?')
+        $hours = if ($m.Groups['hours'].Success) { [double]$m.Groups['hours'].Value } else { 0 }
+        $minutes = if ($m.Groups['minutes'].Success) { [double]$m.Groups['minutes'].Value } else { 0 }
+        $seconds = if ($m.Groups['seconds'].Success) { [double]$m.Groups['seconds'].Value } else { 0 }
+
+        return ($hours * 3600 + $minutes * 60 + $seconds)
+    }
+
+    try {
+        return [double]$runtimeRaw
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-AntallFysiskeKjerner {
+    # Fiskum IT (v0.8.7.6): antall fysiske kjerner - CoreCycler tester ALLTID alle fysiske
+    # kjerner sekvensielt (en/et par om gangen), uavhengig av numberOfThreads/
+    # assignBothVirtualCoresForSingleThread (de styrer KUN hvilke logiske trader pa DEN
+    # kjernen som testes na som blir belastet, ikke parallellitet over flere fysiske
+    # kjerner) - se script-corecycler.ps1 sin coreTestOrderArray-bygging, som alltid
+    # itererer $numPhysCores ganger per iterasjon
+    if ($Script:AntallFysiskeKjernerCache) {
+        return $Script:AntallFysiskeKjernerCache
+    }
+
+    $antall = [int](Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty NumberOfCores)
+    $Script:AntallFysiskeKjernerCache = $antall
+
+    return $antall
+}
+
+function Get-EstimertStabilitetstestVarighetSekunder {
+    # Fiskum IT (v0.8.7.6): summert estimert varighet (sekunder) for HELE den gitte
+    # testplanen (Stabilitetstest) - per test: (sekunder per kjerne per runde) * (antall
+    # fysiske kjerner) * (maxIterations for DEN testen). En "ca."-beregning, ikke en garanti -
+    # en reell kjoring kan ta lengre tid hvis "auto-juster ved feil" trigges (testen gar da
+    # tilbake og gjentar en kjerne pa en mindre aggressiv verdi)
+    param(
+        [Parameter(Mandatory)] [array]$Plan
+    )
+
+    $totalSekunder = 0.0
+    $antallKjerner = Get-AntallFysiskeKjerner
+
+    foreach ($test in $Plan) {
+        $sekunder = Get-EstimertTestVarighetForPlanEntry -Test $test -AntallKjerner $antallKjerner
+
+        if ($null -ne $sekunder) {
+            $totalSekunder += $sekunder
+        }
+    }
+
+    return $totalSekunder
+}
+
+function Get-EstimertTestVarighetForPlanEntry {
+    # Fiskum IT (v0.8.7.6): hjelpefunksjon for EN plan-oppforing - delt ut av
+    # Get-EstimertStabilitetstestVarighetSekunder/Get-EstimertTidIgjenSekunder for aa unnga
+    # duplisert config-lesing/maxIterations-uthenting
+    param(
+        [Parameter(Mandatory)] $Test,
+        [Parameter(Mandatory)] [int]$AntallKjerner
+    )
+
+    $configPath = Join-Path $ConfigDir $Test.config
+
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        return $null
+    }
+
+    $perKjerneSekunder = Get-EstimertTestVarighetSekunder -ConfigPath $configPath
+
+    if ($null -eq $perKjerneSekunder) {
+        return $null
+    }
+
+    $maxIterationsRaw = Get-ConfigLineValue -Path $configPath -Section 'General' -Key 'maxIterations'
+    $maxIterations = if ($maxIterationsRaw) { [int]$maxIterationsRaw } else { 1 }
+
+    return ($perKjerneSekunder * $AntallKjerner * $maxIterations)
+}
+
+function Get-EstimertTidIgjenSekunder {
+    # Fiskum IT (v0.8.7.6): estimert GJENSTAENDE tid (sekunder) for Stabilitetstest - summen
+    # av alle IKKE fullforte plan-oppforinger (fra og med den aktive), minus forlopt tid pa
+    # den aktive testen sa langt (hvis en test faktisk kjorer na)
+    param(
+        [Parameter(Mandatory)] [array]$Plan,
+
+        [Parameter(Mandatory)] $State,
+
+        [Parameter(Mandatory)] [int]$CompletedRounds
+    )
+
+    if ($CompletedRounds -ge $Plan.Count) {
+        return 0.0
+    }
+
+    $antallKjerner = Get-AntallFysiskeKjerner
+    $gjenstaende = @($Plan | Select-Object -Skip $CompletedRounds)
+    $totalSekunder = 0.0
+
+    foreach ($test in $gjenstaende) {
+        $sekunder = Get-EstimertTestVarighetForPlanEntry -Test $test -AntallKjerner $antallKjerner
+
+        if ($null -ne $sekunder) {
+            $totalSekunder += $sekunder
+        }
+    }
+
+    if ($State.status -eq 'Kjører' -and -not [string]::IsNullOrWhiteSpace($State.aktivTestStart)) {
+        try {
+            $startTid = [DateTime]::Parse($State.aktivTestStart, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+            $forloptSekunderPaAktivTest = ((Get-Date) - $startTid).TotalSeconds
+
+            if ($forloptSekunderPaAktivTest -gt 0) {
+                $totalSekunder -= $forloptSekunderPaAktivTest
+            }
+        }
+        catch {
+            # Fiskum IT: kan ikke parses - behold det ujusterte estimatet i stedet for a feile
+        }
+    }
+
+    if ($totalSekunder -lt 0) {
+        $totalSekunder = 0.0
+    }
+
+    return $totalSekunder
+}
+
+function Get-SokFremdriftTekst {
+    # Fiskum IT (v0.8.7.6): tekst for "estimert tid"-feltet under Aggressivt undervolt-sok.
+    # En PRESIS forhandsberegning er IKKE mulig her (uansett produsent) - sok-dybden (antall
+    # steg til feil) er ukjent pa forhand, se toppkommentarene i AssistedUndervolting_Intel.ini
+    # og AssistedUndervolting_Ryzen.ini. Viser i stedet et LEVENDE anslag som forbedres etter
+    # hvert som flere kjerner faktisk last:
+    #   - AMD: ekte per-kjerne-sok - snitt-tid for de allerede laste kjernene brukes til a
+    #     anslå tid for de resterende
+    #   - Intel: EN global verdi for ALLE kjerner samtidig - soket er fullfort etter forste
+    #     laste verdi, det finnes derfor ingen "neste kjerne" a anslå mot. Viser KUN forlopt tid
+    param(
+        [Parameter(Mandatory)] $State,
+        [Parameter(Mandatory)] $Stotte,
+        [Parameter(Mandatory)] [int]$AntallKjerner,
+        [Parameter(Mandatory)] [DateTime]$Na
+    )
+
+    if ([string]::IsNullOrWhiteSpace($State.assistertSokStartTid)) {
+        return 'Forløpt tid: ikke startet ennå'
+    }
+
+    try {
+        $startTid = [DateTime]::Parse($State.assistertSokStartTid, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
+    }
+    catch {
+        return 'Forløpt tid: ukjent (kunne ikke leses)'
+    }
+
+    $forloptSekunder = ($Na - $startTid).TotalSeconds
+    if ($forloptSekunder -lt 0) { $forloptSekunder = 0 }
+    $forloptTekst = Format-Varighet -Sekunder $forloptSekunder
+
+    if ($Stotte.Vendor -eq 'Intel') {
+        return ('Forløpt tid: {0} (estimat ikke mulig - søket er én global verdi for alle kjerner samtidig, avsluttes ved første feil)' -f $forloptTekst)
+    }
+
+    $antallLaaste = @($State.laasteKjerner.PSObject.Properties).Count
+
+    if ($antallLaaste -le 0 -or $AntallKjerner -le 0) {
+        return ('Forløpt tid: {0} (estimat kommer etter at første kjerne er låst)' -f $forloptTekst)
+    }
+
+    if ($antallLaaste -ge $AntallKjerner) {
+        return ('Forløpt tid: {0} (alle kjerner låst)' -f $forloptTekst)
+    }
+
+    $snittPerKjerne = $forloptSekunder / $antallLaaste
+    $gjenstaendeKjerner = $AntallKjerner - $antallLaaste
+    $estimertGjenstaende = $snittPerKjerne * $gjenstaendeKjerner
+
+    return ('Forløpt tid: {0} | {1}/{2} kjerner låst | Estimert gjenstående (snitt/kjerne): ~{3}' -f $forloptTekst, $antallLaaste, $AntallKjerner, (Format-Varighet -Sekunder $estimertGjenstaende))
+}
+
 function Get-YCruncherModusForCpu {
     # Fiskum IT (v0.8.7.2): returnerer en eksplisitt, dokumentert y-cruncher-modusstreng for
     # den faktisk paaviste CPU-en, i stedet for "auto". y-cruncher sin egen auto-deteksjon
@@ -3401,6 +3667,40 @@ function Get-StatusColor {
     }
 }
 
+function Get-FremdriftTidTekst {
+    # Fiskum IT (v0.8.7.6): velger riktig tidsestimat-tekst for "Fremdrift"-feltet, avhengig
+    # av modus - se Get-EstimertStabilitetstestVarighetSekunder/Get-EstimertTidIgjenSekunder
+    # (Stabilitetstest, en ekte forhandsberegning) og Get-SokFremdriftTekst (Aggressivt
+    # undervolt-sok, et levende anslag - se forklaringen der for hvorfor en forhandsberegning
+    # ikke er mulig der). Try/catch rundt det hele: dette er et "nice to have"-estimat, en feil
+    # her skal ALDRI kunne vise en feilmelding i UI'et eller stoppe resten av Refresh-UiState
+    param(
+        [Parameter(Mandatory)] [array]$Plan,
+        [Parameter(Mandatory)] $State,
+        [Parameter(Mandatory)] [int]$CompletedRounds
+    )
+
+    try {
+        if ($State.modus -eq 'AssistertUndervolting') {
+            $stotte = Get-UndervoltStotteInfo
+            return Get-SokFremdriftTekst -State $State -Stotte $stotte -AntallKjerner (Get-AntallFysiskeKjerner) -Na (Get-Date)
+        }
+
+        if ($Plan.Count -eq 0) {
+            return ''
+        }
+
+        $totalSekunder = Get-EstimertStabilitetstestVarighetSekunder -Plan $Plan
+        $igjenSekunder = Get-EstimertTidIgjenSekunder -Plan $Plan -State $State -CompletedRounds $CompletedRounds
+
+        return ('Estimert total tid: ~{0} | Estimert tid igjen: ~{1}' -f (Format-Varighet -Sekunder $totalSekunder), (Format-Varighet -Sekunder $igjenSekunder))
+    }
+    catch {
+        Write-ManagerLog -Text "Kunne ikke beregne tidsestimat for Fremdrift: $($_.Exception.Message)"
+        return ''
+    }
+}
+
 function Refresh-UiState {
     $plan = $App.Plan
     $state = $App.State
@@ -3459,6 +3759,7 @@ function Refresh-UiState {
 
     $App.Ui.progress.Value = $pct
     $App.Ui.lblProgressValue.Text = ('{0}/{1} tester ({2}%)' -f $completedRounds, $totalRounds, $pct)
+    $App.Ui.lblTidValue.Text = Get-FremdriftTidTekst -Plan $plan -State $state -CompletedRounds $completedRounds
 
     Write-DesktopStatusReport -State $state -Plan $plan
 }
@@ -4617,7 +4918,8 @@ function Show-BrukerveiledningDialog {
         'Kom i gang' = "De to testmodusene (under ""Modus""):`r`n`r`n" +
             "* Aggressivt undervolt-søk: søker oppover mot en stadig høyere (mer aggressiv) undervolting-verdi, for å finne grensen per kjerne.`r`n`r`n" +
             "* Stabilitetstest (auto-juster ved feil): kjører faste/valgte verdier over en full testplan, og justerer automatisk NEDOVER (mindre aggressivt) hvis det oppstår en feil.`r`n`r`n" +
-            "Hurtigtaster: F5 = Start/Gjenoppta, Esc = Stopp test."
+            "Hurtigtaster: F5 = Start/Gjenoppta, Esc = Stopp test.`r`n`r`n" +
+            """Fremdrift"" viser et ca.-tidsestimat: en ekte beregning for Stabilitetstest (kjerner × varighet × runder), men for Aggressivt undervolt-søk kun et levende anslag som forbedres etter hvert (søkedybden er ukjent på forhånd - på Intel, som kun har ÉN delt verdi for alle kjerner, vises bare forløpt tid)."
         'Avansert og Verktøy' = """Avansert...""`r`n" +
             "Velg hvilke tester (fra testplan.json) som skal kjøres i Stabilitetstest, og varighet per test (minutter, eller ""auto""). Stjernemerkede tester er anbefalt, og avhuket fra start på en fersk installasjon.`r`n`r`n" +
             """Verktøy...""`r`n" +
@@ -5168,7 +5470,9 @@ function Build-Ui {
     $groupProgress = New-Object System.Windows.Forms.GroupBox
     $groupProgress.Text = 'Fremdrift'
     $groupProgress.Location = New-Object System.Drawing.Point(16,358)
-    $groupProgress.Size = New-Object System.Drawing.Size(1214,90)
+    # Fiskum IT (v0.8.7.6): hevet fra 90 til 116 for a fa plass til den nye
+    # tidsestimat-raden ($lblTidValue) under selve fremdriftsbaren
+    $groupProgress.Size = New-Object System.Drawing.Size(1214,116)
     $groupProgress.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupProgress.BackColor = $panelBackColor
     $groupProgress.ForeColor = $panelForeColor
@@ -5188,9 +5492,16 @@ function Build-Ui {
 
     $lblProgressValue = New-Label -Text '0/0 tester (0%)' -X 1010 -Y 34 -W 180 -H 22 -Bold $true
 
+    # Fiskum IT (v0.8.7.6): ca. kalkulert tidsbruk/tid igjen - se Get-FremdriftTidTekst.
+    # Ikke fet skrift (mindre fremtredende enn selve fremdriften over) og en nedtonet
+    # farge, siden dette alltid er et "ca."-anslag, ikke en garanti
+    $lblTidValue = New-Label -Text '' -X 18 -Y 64 -W 1172 -H 22
+    $lblTidValue.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
+
     $groupProgress.Controls.AddRange(@(
         $progress,
-        $lblProgressValue
+        $lblProgressValue,
+        $lblTidValue
     ))
 
     # Fiskum IT: dette er na hovedinnholdet i vinduet - CoreCycler-konsollen kjores skjult
@@ -5201,7 +5512,9 @@ function Build-Ui {
     # tilgjengelig i Manager\logs\ - se Add-History)
     $groupLog = New-Object System.Windows.Forms.GroupBox
     $groupLog.Text = 'Siste CoreCycler-logg'
-    $groupLog.Location = New-Object System.Drawing.Point(16,456)
+    # Fiskum IT (v0.8.7.6): flyttet ned 26px (456 -> 482), matcher groupProgress sin nye
+    # hoyde (90 -> 116) over
+    $groupLog.Location = New-Object System.Drawing.Point(16,482)
     # Fiskum IT (v0.8.2): redusert fra 380 - na i en rullbar panel, sa dette er kun et
     # komfort-mal for standardvisningen, ikke en hard grense
     $groupLog.Size = New-Object System.Drawing.Size(1214,260)
@@ -5247,6 +5560,7 @@ function Build-Ui {
     $App.Ui.lblCoreValue = $lblCoreValue
     $App.Ui.lblOffsetValue = $lblOffsetValue
     $App.Ui.lblProgressValue = $lblProgressValue
+    $App.Ui.lblTidValue = $lblTidValue
     $App.Ui.progress = $progress
     $App.Ui.lblLastLogValue = $lblLastLogValue
     $App.Ui.txtLog = $txtLog
