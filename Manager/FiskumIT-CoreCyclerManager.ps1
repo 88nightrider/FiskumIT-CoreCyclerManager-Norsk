@@ -73,6 +73,23 @@ Add-Type -Namespace FiskumIT -Name LsaSecrets -MemberDefinition '
     public static extern int LsaNtStatusToWinError(uint Status);
 '
 
+# Fiskum IT (v0.8.7.4): for Test-CurrentUserHasPassword - den eneste palitelige maten a
+# avgjore om en konto FAKTISK har et passord satt na (uten a prompte), siden Get-LocalUser
+# sin PasswordRequired-egenskap kun gjenspeiler en POLICY-innstilling, ikke faktisk tilstand
+Add-Type -Namespace FiskumIT -Name LogonCheck -MemberDefinition '
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    public static extern bool LogonUser(
+        string lpszUsername,
+        string lpszDomain,
+        string lpszPassword,
+        int dwLogonType,
+        int dwLogonProvider,
+        out System.IntPtr phToken);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool CloseHandle(System.IntPtr hObject);
+'
+
 # Fiskum IT: ma initialiseres her, IKKE bare lazily inni Get-CpuInstruksjonssett - under
 # Set-StrictMode -Version Latest (over) kaster selve LESINGEN av en aldri-satt
 # Script-scope-variabel ("cannot be retrieved because it has not been set"), ikke bare
@@ -236,7 +253,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.3'
+$ManagerVersion = '0.8.7.4'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -922,15 +939,53 @@ function Get-AutoLogonRegistryState {
 }
 
 function Test-CurrentUserHasPassword {
-    # Fiskum IT (v0.8.2): returnerer $true/$false, eller strengen 'Unknown' for kontotyper
-    # Get-LocalUser ikke kan svare for (Microsoft-konto/domenekonto) - IKKE behandlet som
-    # "hopp over" av kalleren, se Ensure-AutoLogonConfigured
+    # Fiskum IT (v0.8.7.4): returnerer $true/$false, eller strengen 'Unknown' hvis det ikke
+    # kan avgjores trygt - IKKE behandlet som "hopp over" av kalleren, se
+    # Ensure-AutoLogonConfigured.
+    #
+    # VIKTIG (rettet i denne versjonen): brukte tidligere Get-LocalUser sin
+    # PasswordRequired-egenskap - denne gjenspeiler imidlertid en POLICY-innstilling
+    # ("kontoen TILLATES a ha et blankt passord"), IKKE om kontoen FAKTISK har et passord
+    # satt na. Mange lokale Windows-kontoer har PasswordRequired=$false som STANDARD selv
+    # om brukeren har satt et ekte passord - dette forte til at v0.8.7 sin "hopp over
+    # passord-prompten naar kontoen ikke har passord"-fiks feilaktig hoppet over prompten
+    # OGSA for en konto MED passord (rapportert av bruker 2026-06-26).
+    #
+    # Den eneste palitelige maten a avgjore dette UTEN a prompte er a faktisk PROVE a logge
+    # inn med et BLANKT passord (LogonUser) og se om Windows godtar det - samme prinsipp
+    # som mange administrasjonsverktoy bruker for nettopp dette sporsmalet. Krever ingen
+    # spesielle privilegier utover det Manageren allerede har (kjorer alltid elevert)
+    $tokenHandle = [IntPtr]::Zero
+
     try {
-        $localUser = Get-LocalUser -Name $env:USERNAME -ErrorAction Stop
-        return [bool]$localUser.PasswordRequired
+        # LOGON32_LOGON_NETWORK (3): validerer passordet uten a laste en interaktiv profil -
+        # raskere og med mindre bivirkning enn LOGON32_LOGON_INTERACTIVE for dette ENE
+        # formalet. LOGON32_PROVIDER_DEFAULT = 0
+        $lyktes = [FiskumIT.LogonCheck]::LogonUser($env:USERNAME, $env:USERDOMAIN, '', 3, 0, [ref]$tokenHandle)
+
+        if ($lyktes) {
+            return $false
+        }
+
+        $win32Feil = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+
+        # ERROR_LOGON_FAILURE (1326) - det BLANKE passordet ble eksplisitt avvist, altsa
+        # har kontoen et faktisk (ikke-blankt) passord
+        if ($win32Feil -eq 1326) {
+            return $true
+        }
+
+        # Andre feilkoder (f.eks. kontobegrensninger, domenekonto som ikke stottes lokalt
+        # her) - usikkert, sporr likevel for sikkerhets skyld
+        return 'Unknown'
     }
     catch {
         return 'Unknown'
+    }
+    finally {
+        if ($tokenHandle -ne [IntPtr]::Zero) {
+            [void][FiskumIT.LogonCheck]::CloseHandle($tokenHandle)
+        }
     }
 }
 
@@ -3203,18 +3258,38 @@ function Update-AssistertUiEnabled {
 }
 
 function Sync-GjenopprettingKnapper {
-    # Fiskum IT (v0.8.7): "Aktiver"/"Deaktiver" erstatter de to tidligere avhukingene -
-    # knappen som allerede matcher gjeldende tilstand vises nedtonet/deaktivert, samme
-    # visuelle monster brukt andre steder i UI for "dette er allerede valgt"
+    # Fiskum IT (v0.8.7.4): "Aktiv"/"Deaktivert" fungerer som en av/pa-bryter (to knapper,
+    # alltid like klikkbare - se begrunnelsen under). Tidligere ble den knappen som matchet
+    # gjeldende tilstand vist via Enabled=$false, men dette ga DARLIG synlig tilbakemelding -
+    # SAMME kjente WinForms-kvirk som CheckBox/RadioButton-tekst andre steder i UI'et
+    # (Update-AssistertUiEnabled m.fl.): Windows tvinger gjennom sin EGEN, lite synlige
+    # gratoneoverstyring av Enabled=$false-kontroller PA TOPP AV egne BackColor/ForeColor.
+    # Holder derfor BEGGE knappene Enabled=$true (klikk pa den allerede-valgte er et
+    # harmlost no-op), og signaliserer tilstand KUN via tydelig fargesetting i stedet -
+    # gronn+fremhevet for den valgte, klart gra+nedtonet for den andre
     if (-not ($App.Ui.btnGjenopprettingAktiver -and $App.Ui.btnGjenopprettingDeaktiver)) {
         return
     }
 
     $erAktivertNa = [bool]$App.State.autostartTask -and [bool]$App.State.autoRestartOnFeil
-    $erDeaktivertNa = (-not [bool]$App.State.autostartTask) -and (-not [bool]$App.State.autoRestartOnFeil)
 
-    $App.Ui.btnGjenopprettingAktiver.Enabled = -not $erAktivertNa
-    $App.Ui.btnGjenopprettingDeaktiver.Enabled = -not $erDeaktivertNa
+    $valgtBackColor = [System.Drawing.Color]::FromArgb(13,234,160)
+    $valgtForeColor = [System.Drawing.Color]::FromArgb(15,17,22)
+    $ikkeValgtBackColor = [System.Drawing.Color]::FromArgb(45,48,55)
+    $ikkeValgtForeColor = [System.Drawing.Color]::FromArgb(140,144,150)
+
+    if ($erAktivertNa) {
+        $App.Ui.btnGjenopprettingAktiver.BackColor = $valgtBackColor
+        $App.Ui.btnGjenopprettingAktiver.ForeColor = $valgtForeColor
+        $App.Ui.btnGjenopprettingDeaktiver.BackColor = $ikkeValgtBackColor
+        $App.Ui.btnGjenopprettingDeaktiver.ForeColor = $ikkeValgtForeColor
+    }
+    else {
+        $App.Ui.btnGjenopprettingDeaktiver.BackColor = $valgtBackColor
+        $App.Ui.btnGjenopprettingDeaktiver.ForeColor = $valgtForeColor
+        $App.Ui.btnGjenopprettingAktiver.BackColor = $ikkeValgtBackColor
+        $App.Ui.btnGjenopprettingAktiver.ForeColor = $ikkeValgtForeColor
+    }
 }
 
 function Switch-Modus {
@@ -4475,7 +4550,7 @@ function Show-BrukerveiledningDialog {
             "Velg hvilke tester (fra testplan.json) som skal kjøres i Stabilitetstest, og varighet per test (minutter, eller ""auto""). Stjernemerkede tester er anbefalt, og avhuket fra start på en fersk installasjon.`r`n`r`n" +
             """Verktøy...""`r`n" +
             "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon)."
-        'Automatisk gjenoppretting' = """Aktiver""/""Deaktiver"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
+        'Automatisk gjenoppretting' = """Aktiv""/""Deaktivert"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
             "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
             "Feltet ""Minutter å vente etter restart før gjenopptak"" styrer hvor lenge Manageren venter etter en automatisk restart før testen gjenopptas."
         'Resultater' = "Skrivebordsrapport: full oppsummering lagret på skrivebordet etter hver fullført test.`r`n`r`n" +
@@ -4984,8 +5059,8 @@ function Build-Ui {
     # logikken som tidligere lå i Add_CheckedChanged-handlerne under), sa to knapper som
     # gjor det eksplisitt er enklere a forsta enn to uavhengige-utseende avhukinger som i
     # praksis ikke kunne settes uavhengig av hverandre
-    $btnGjenopprettingAktiver = New-Button -Text 'Aktiver' -X 18 -Y 24 -W 160
-    $btnGjenopprettingDeaktiver = New-Button -Text 'Deaktiver' -X 188 -Y 24 -W 160
+    $btnGjenopprettingAktiver = New-Button -Text 'Aktiv' -X 18 -Y 24 -W 160
+    $btnGjenopprettingDeaktiver = New-Button -Text 'Deaktivert' -X 188 -Y 24 -W 160
 
     $lblRestartWaitMinutes = New-Label -Text 'Minutter å vente etter restart før gjenopptak:' -X 18 -Y 86 -W 320 -H 22
 
@@ -5003,7 +5078,7 @@ function Build-Ui {
     $numRestartWaitMinutes.BackColor = $panelBackColor
     $numRestartWaitMinutes.ForeColor = $panelForeColor
 
-    $lblGjenopprettingHint = New-Label -Text '"Aktiver" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
+    $lblGjenopprettingHint = New-Label -Text '"Aktiv" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
     $lblGjenopprettingHint.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 134 -W 1170 -H 22

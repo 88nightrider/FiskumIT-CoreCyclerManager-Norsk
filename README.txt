@@ -1,5 +1,21 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.3
+﻿Fiskum IT CoreCycler Manager v0.8.7.4
 ============================================================
+
+Nyheter i v0.8.7.4
+-------------------
+- Rettet en reell bug: passord-prompten for autologon ble feilaktig
+  hoppet over OGSA for kontoer MED passord. Test-CurrentUserHasPassword
+  brukte Get-LocalUser sin "PasswordRequired"-egenskap, som kun
+  gjenspeiler en POLICY-innstilling ("kontoen TILLATES a ha blankt
+  passord") - IKKE om kontoen faktisk har et passord satt na. Sjekker
+  na i stedet faktisk (uten a prompte) ved a prove en innlogging med
+  blankt passord (LogonUser)
+- "Aktiv"/"Deaktivert"-knappene under "Automatisk gjenoppretting" var
+  darlig synlige for hvilken som var valgt (Enabled=$false-knapper far
+  en lite synlig gratoneoverstyring av Windows). Begge knappene er na
+  alltid klikkbare, og tilstand vises i stedet tydelig via farge -
+  gronn+fremhevet for valgt, klart gra+nedtonet for den andre. Omdopt
+  fra "Aktiver"/"Deaktiver" til "Aktiv"/"Deaktivert"
 
 Nyheter i v0.8.7.3
 -------------------
