@@ -1,0 +1,32 @@
+TM5 / TestMem5 - lisens og opprinnelse
+============================================================
+
+Fiskum IT (v0.8.7.10): dette verktoyet, i motsetning til IntelVoltageControl
+(se ../IntelVoltageControl/LICENSE.txt), har INGEN formell, skriftlig lisens
+- verken fra den opprinnelige forfatteren, videreutvikleren, eller
+config-forfatterne. Dette er dokumentert her av apenhet/etterprovbarhet,
+ikke fordi det er bekreftet problemfritt.
+
+Opprinnelse (sa langt vi kan spore det):
+- TM5.exe/TM5.dll: opprinnelig skrevet av "Serj" (TestMem5 0.12), som senere
+  forlot prosjektet. Videreutviklet av "CoolCmd"
+  (https://github.com/CoolCmd/TestMem5). Verken originalen eller
+  videreutviklingen har en LICENSE-fil eller eksplisitt lisenstekst - det
+  distribueres som uformell "freeware" pa OC-forum (f.eks. overclock.net).
+- Config-filene i "bin\" (1usmus, anta777-variantene, serj, LMhz) er
+  forfattet av ulike personer i RAM-overklokkings-miljoet og delt fritt pa
+  forum, men UTEN en formell, skriftlig redistribusjonsrett. Minst en
+  lignende config fra samme miljo er sett med en eksplisitt
+  "Copyrights to the program belong to me"-pastand fra forfatteren - det er
+  altsa IKKE gitt at fri forumdeling ogsa betyr et samtykke til a bundles
+  inn i et tredjeparts, offentlig delt program som dette.
+
+Hvorfor det er tatt med likevel: TM5 deles fritt over hele
+RAM-overklokkings-miljoet (anta777/1usmus-configene er en de-facto
+standard), og brukes her for et legitimt, dokumentert behov - a isolere
+RAM-/Infinity Fabric-instabilitet fra CPU-kjerne-/Curve Optimizer-
+instabilitet (se README.txt). Dette er en bevisst, akseptert risiko, ikke
+en bekreftet rettighetsklarering.
+
+Tar du kontakt og er rettighetshaver til TM5 eller en av config-filene og
+onsker dette fjernet, ta kontakt via GitHub-repoet - det fjernes umiddelbart.

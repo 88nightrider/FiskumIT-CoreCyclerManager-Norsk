@@ -1,5 +1,27 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.9
+﻿Fiskum IT CoreCycler Manager v0.8.7.10
 ============================================================
+
+Nyheter i v0.8.7.10
+-------------------
+- TM5 (TestMem5) bundles na MED Manageren (CoreCycler\tools\TestMem5\) - "Kjor
+  TM5..."-knappen bruker den automatisk, ingen filvelger forste gang lenger.
+  TM5 har INGEN formell, bekreftet lisens (uformell community-freeware) - en
+  bevisst avgjorelse, apent dokumentert i LISENS-OG-OPPRINNELSE.txt i samme
+  mappe
+- WinRing0x64.sys (brukt av IntelVoltageControl for Intel-spenningskontroll)
+  blir flagget av Windows Defender/antivirus siden mars 2025 (CVE-2020-14979)
+  - traff ALLE store verktoy som bruker WinRing0 (LibreHardwareMonitor,
+  HWiNFO, MSI Afterburner, FanControl, OpenRGB), ikke unikt for var bundlede
+  kopi. Forberedt (men IKKE bygget/testet - intet C/C++-byggemiljo
+  tilgjengelig denne runden) en patch som bytter til PawnIO, en nyere,
+  signert driver flere av de store verktoyene over har gatt over til i 2025
+  spesifikt pga. dette. Se CoreCycler\tools\IntelVoltageControl\PawnIO-patch\
+  BYGG-OG-PATCH-README.txt for fullstendig status og gjenstaende arbeid.
+  IntelVoltageControl.exe bruker fortsatt WinRing0 som i dag - INGEN endring
+  i faktisk virkemate denne runden
+- Lagt til IntelVoltageControl sin egen MIT-lisens (IntelVoltageControl-
+  LICENSE-MIT.txt) - den eksisterende LICENSE.txt i samme mappe dekket kun
+  WinRing0-driveren, ikke selve IntelVoltageControl-programmet
 
 Nyheter i v0.8.7.9
 -------------------

@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.9'
+$ManagerVersion = '0.8.7.10'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -4636,18 +4636,32 @@ function Open-DesktopReport {
 }
 
 function Start-Tm5MemoryTest {
-    # Fiskum IT (v0.8.7.9): starter en BRUKER-installert TM5 (TestMem5) - en velkjent
-    # community-minnetest (configer som anta777/1usmus) for RAM-/Infinity Fabric-
-    # stabilitetstesting, en helt annen feilklasse enn CoreCycler sin CPU-kjerne-/Curve
-    # Optimizer-testing. Bundles IKKE med Manageren selv (uklare distribusjonsrettigheter
-    # for selve TM5-binaeren/community-configene, i motsetning til CoreCycler/
-    # IntelVoltageControl som har avklarte lisenser) - brukeren peker selv til sin egen
-    # TM5.exe forste gang, stien lagres deretter i state.json for senere bruk
+    # Fiskum IT (v0.8.7.10): TM5 (TestMem5) bundles na MED Manageren, under
+    # CoreCycler\tools\TestMem5\ (samme mappemonster som IntelVoltageControl/
+    # ryzen-smu-cli) - se LISENS-OG-OPPRINNELSE.txt i samme mappe for en apen, aerlig
+    # forklaring av at dette IKKE har en formell, bekreftet redistribusjonsrett (i
+    # motsetning til IntelVoltageControl), men brukes likevel etter en bevisst avgjorelse.
+    # En velkjent community-minnetest (configer som anta777/1usmus) for RAM-/Infinity
+    # Fabric-stabilitetstesting - en helt annen feilklasse enn CoreCycler sin CPU-kjerne-/
+    # Curve Optimizer-testing.
+    #
+    # Bruker den bundlede kopien automatisk hvis den finnes - faller tilbake til a sporre
+    # (og lagre brukerens eget valg i state.json) KUN hvis den bundlede kopien mangler
+    # (f.eks. en eldre installasjon fra for v0.8.7.10, eller hvis brukeren foretrekker sin
+    # egen TM5-versjon/configer)
     #
     # TM5 har ingen dokumentert/palitelig kommandolinje-syntaks for a velge config-filen
     # direkte - starter derfor TM5.exe UTEN argumenter (samme som a dobbeltklikke den selv)
     # og minner brukeren pa a velge config-filen INNI TM5 sitt eget grensesnitt, i stedet
     # for a gjette pa en CLI-switch som kan vaere feil for brukerens TM5-versjon
+    $bundledTm5Exe = Join-Path $CoreCyclerDir 'tools\TestMem5\TM5.exe'
+    $bundledTm5Bin = Join-Path $CoreCyclerDir 'tools\TestMem5\bin'
+
+    if (-not $App.State.tm5ExePath -and (Test-Path -LiteralPath $bundledTm5Exe)) {
+        $App.State.tm5ExePath = $bundledTm5Exe
+        Save-State -State $App.State
+    }
+
     if (-not (Test-Path -LiteralPath $App.State.tm5ExePath -ErrorAction SilentlyContinue)) {
         $exeDialog = New-Object System.Windows.Forms.OpenFileDialog
         $exeDialog.Title = 'Velg TM5.exe (TestMem5)'
@@ -4664,7 +4678,7 @@ function Start-Tm5MemoryTest {
     if (-not (Test-Path -LiteralPath $App.State.tm5ConfigPath -ErrorAction SilentlyContinue)) {
         $cfgDialog = New-Object System.Windows.Forms.OpenFileDialog
         $cfgDialog.Title = 'Velg en TM5-config-fil (f.eks. anta777/1usmus) - kun for referanse, velges fortsatt INNI TM5 selv'
-        $cfgDialog.InitialDirectory = Split-Path -Parent $App.State.tm5ExePath
+        $cfgDialog.InitialDirectory = if (Test-Path -LiteralPath $bundledTm5Bin) { $bundledTm5Bin } else { Split-Path -Parent $App.State.tm5ExePath }
         $cfgDialog.Filter = 'TM5-config (*.cfg)|*.cfg|Alle filer (*.*)|*.*'
 
         if ($cfgDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -5001,7 +5015,7 @@ function Show-BrukerveiledningDialog {
             """Verktøy...""`r`n" +
             "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon). Den røde knappen tvangsdeaktiverer autologon uavhengig av hvem som satte den opp - nyttig hvis en eldre versjon av Manageren (eller noe annet) har latt den stå igjen.`r`n`r`n" +
             "Den blå knappen ""Kjør TM5...""`r`n" +
-            "CoreCycler/Manageren tester kun CPU-kjernene - ALDRI selve RAM-en/minnekontrolleren. En feil i en bred test (f.eks. OCCT ""CPU + RAM"") kan derfor like gjerne komme fra RAM/Infinity Fabric som fra en Curve Optimizer-verdi. TM5 (TestMem5, en velkjent community-minnetest) lar deg isolere dette - knappen starter din egen, lokalt installerte TM5.exe (bundles ikke med Manageren - velg filen selv første gang). Velg deretter selve config-filen (f.eks. anta777/1usmus) inni TM5 sitt eget vindu.`r`n`r`n" +
+            "CoreCycler/Manageren tester kun CPU-kjernene - ALDRI selve RAM-en/minnekontrolleren. En feil i en bred test (f.eks. OCCT ""CPU + RAM"") kan derfor like gjerne komme fra RAM/Infinity Fabric som fra en Curve Optimizer-verdi. TM5 (TestMem5, en velkjent community-minnetest, med anta777/1usmus-configer) følger nå med Manageren og startes direkte - velg ønsket config-fil inni TM5 sitt eget vindu (Manageren kan ikke styre dette automatisk). TM5 har ingen formell lisens (se LISENS-OG-OPPRINNELSE.txt i CoreCycler\\tools\\TestMem5\\) - tatt med som en bevisst avgjørelse siden det deles fritt i RAM-overklokkingsmiljøet.`r`n`r`n" +
             "MemTest86 (et annet velkjent minnetest-verktøy) kan IKKE startes herfra - det kjører fra en oppstartbar USB-pinne FØR Windows starter, og kan derfor ikke vises eller styres fra Manageren sitt UI i det hele tatt."
         'Automatisk gjenoppretting' = """Aktiv""/""Deaktivert"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
             "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
