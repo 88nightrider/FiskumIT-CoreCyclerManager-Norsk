@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.8'
+$ManagerVersion = '0.8.7.9'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -604,6 +604,13 @@ function New-DefaultState {
         # Fiskum IT (v0.8.2): tidspunkt (ISO) for siste GitHub-oppdateringssjekk - se
         # Invoke-OppdateringssjekkVedOppstart. Tom streng = aldri sjekket, sjekk na
         sisteOppdateringssjekk = ''
+
+        # Fiskum IT (v0.8.7.9): sti til en BRUKER-installert TM5 (TestMem5) - bundles IKKE
+        # med Manageren selv (uklare distribusjonsrettigheter for selve TM5-binaeren/
+        # community-configene), se Start-Tm5MemoryTest. Tom streng = ikke valgt ennaa,
+        # sporr ved forste bruk
+        tm5ExePath    = ''
+        tm5ConfigPath = ''
     }
 }
 
@@ -4628,6 +4635,67 @@ function Open-DesktopReport {
     Start-Process notepad.exe -ArgumentList ('"{0}"' -f $DesktopLog)
 }
 
+function Start-Tm5MemoryTest {
+    # Fiskum IT (v0.8.7.9): starter en BRUKER-installert TM5 (TestMem5) - en velkjent
+    # community-minnetest (configer som anta777/1usmus) for RAM-/Infinity Fabric-
+    # stabilitetstesting, en helt annen feilklasse enn CoreCycler sin CPU-kjerne-/Curve
+    # Optimizer-testing. Bundles IKKE med Manageren selv (uklare distribusjonsrettigheter
+    # for selve TM5-binaeren/community-configene, i motsetning til CoreCycler/
+    # IntelVoltageControl som har avklarte lisenser) - brukeren peker selv til sin egen
+    # TM5.exe forste gang, stien lagres deretter i state.json for senere bruk
+    #
+    # TM5 har ingen dokumentert/palitelig kommandolinje-syntaks for a velge config-filen
+    # direkte - starter derfor TM5.exe UTEN argumenter (samme som a dobbeltklikke den selv)
+    # og minner brukeren pa a velge config-filen INNI TM5 sitt eget grensesnitt, i stedet
+    # for a gjette pa en CLI-switch som kan vaere feil for brukerens TM5-versjon
+    if (-not (Test-Path -LiteralPath $App.State.tm5ExePath -ErrorAction SilentlyContinue)) {
+        $exeDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $exeDialog.Title = 'Velg TM5.exe (TestMem5)'
+        $exeDialog.Filter = 'TM5/TestMem5 (*.exe)|*.exe|Alle filer (*.*)|*.*'
+
+        if ($exeDialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
+            return
+        }
+
+        $App.State.tm5ExePath = $exeDialog.FileName
+        Save-State -State $App.State
+    }
+
+    if (-not (Test-Path -LiteralPath $App.State.tm5ConfigPath -ErrorAction SilentlyContinue)) {
+        $cfgDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $cfgDialog.Title = 'Velg en TM5-config-fil (f.eks. anta777/1usmus) - kun for referanse, velges fortsatt INNI TM5 selv'
+        $cfgDialog.InitialDirectory = Split-Path -Parent $App.State.tm5ExePath
+        $cfgDialog.Filter = 'TM5-config (*.cfg)|*.cfg|Alle filer (*.*)|*.*'
+
+        if ($cfgDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            $App.State.tm5ConfigPath = $cfgDialog.FileName
+            Save-State -State $App.State
+        }
+    }
+
+    try {
+        Start-Process -FilePath $App.State.tm5ExePath -WorkingDirectory (Split-Path -Parent $App.State.tm5ExePath)
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Kunne ikke starte TM5: $($_.Exception.Message)",
+            'Fiskum IT CoreCycler Manager',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+        return
+    }
+
+    $configHint = if ($App.State.tm5ConfigPath) { " ($($App.State.tm5ConfigPath))" } else { '' }
+
+    [System.Windows.Forms.MessageBox]::Show(
+        "TM5 er startet.`r`n`r`nVelg config-filen$configHint manuelt inni TM5 sitt eget vindu (File -> Load, eller fra listen) - Manageren kan ikke styre dette automatisk.",
+        'Fiskum IT CoreCycler Manager',
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    ) | Out-Null
+}
+
 function Reset-StateToStart {
     $result = [System.Windows.Forms.MessageBox]::Show(
         'Vil du nullstille state og starte fra test 1?',
@@ -4819,19 +4887,27 @@ function Show-VerktoyDialog {
     $btnTvingDeaktiverAutologon = New-Button -Text 'Tving deaktivering av autologon (uansett hvem som satte den opp)' -X 20 -Y 270 -W 300 -H 46
     $btnTvingDeaktiverAutologon.BackColor = [System.Drawing.Color]::FromArgb(220,53,69)
 
+    # Fiskum IT (v0.8.7.9): se Start-Tm5MemoryTest - en HELT ANNEN feilklasse (RAM/Infinity
+    # Fabric) enn resten av Manageren, derfor en tydelig egen, nedtonet bla farge (ikke
+    # gronn som "trygge" handlinger, ikke rod/oransje som autologon-handlingene over)
+    $btnTm5 = New-Button -Text 'Kjør TM5 (minnetest, RAM-stabilitet)...' -X 20 -Y 330 -W 300 -H 34
+    $btnTm5.BackColor = [System.Drawing.Color]::FromArgb(86,156,214)
+
     $dlg.Controls.AddRange(@(
         $btnOpenLog,
         $btnOpenReport,
         $btnResetState,
         $btnOpenConfigDir,
         $btnDeaktiverAutologon,
-        $btnTvingDeaktiverAutologon
+        $btnTvingDeaktiverAutologon,
+        $btnTm5
     ))
 
     $btnOpenLog.Add_Click({ Open-LatestLog })
     $btnOpenReport.Add_Click({ Open-DesktopReport })
     $btnResetState.Add_Click({ Reset-StateToStart })
     $btnOpenConfigDir.Add_Click({ Start-Process explorer.exe -ArgumentList ('"{0}"' -f $ConfigDir) })
+    $btnTm5.Add_Click({ Start-Tm5MemoryTest })
 
     $btnDeaktiverAutologon.Add_Click({
         if (-not [bool]$App.State.autoLogonConfiguredByUs) {
@@ -4923,7 +4999,10 @@ function Show-BrukerveiledningDialog {
         'Avansert og Verktøy' = """Avansert...""`r`n" +
             "Velg hvilke tester (fra testplan.json) som skal kjøres i Stabilitetstest, og varighet per test (minutter, eller ""auto""). Stjernemerkede tester er anbefalt, og avhuket fra start på en fersk installasjon.`r`n`r`n" +
             """Verktøy...""`r`n" +
-            "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon). Den siste, røde knappen tvangsdeaktiverer autologon uavhengig av hvem som satte den opp - nyttig hvis en eldre versjon av Manageren (eller noe annet) har latt den stå igjen."
+            "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon). Den røde knappen tvangsdeaktiverer autologon uavhengig av hvem som satte den opp - nyttig hvis en eldre versjon av Manageren (eller noe annet) har latt den stå igjen.`r`n`r`n" +
+            "Den blå knappen ""Kjør TM5...""`r`n" +
+            "CoreCycler/Manageren tester kun CPU-kjernene - ALDRI selve RAM-en/minnekontrolleren. En feil i en bred test (f.eks. OCCT ""CPU + RAM"") kan derfor like gjerne komme fra RAM/Infinity Fabric som fra en Curve Optimizer-verdi. TM5 (TestMem5, en velkjent community-minnetest) lar deg isolere dette - knappen starter din egen, lokalt installerte TM5.exe (bundles ikke med Manageren - velg filen selv første gang). Velg deretter selve config-filen (f.eks. anta777/1usmus) inni TM5 sitt eget vindu.`r`n`r`n" +
+            "MemTest86 (et annet velkjent minnetest-verktøy) kan IKKE startes herfra - det kjører fra en oppstartbar USB-pinne FØR Windows starter, og kan derfor ikke vises eller styres fra Manageren sitt UI i det hele tatt."
         'Automatisk gjenoppretting' = """Aktiv""/""Deaktivert"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
             "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
             "Feltet ""Minutter å vente etter restart før gjenopptak"" styrer hvor lenge Manageren venter etter en automatisk restart før testen gjenopptas."

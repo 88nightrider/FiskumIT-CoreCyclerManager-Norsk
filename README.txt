@@ -1,5 +1,22 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.8
+﻿Fiskum IT CoreCycler Manager v0.8.7.9
 ============================================================
+
+Nyheter i v0.8.7.9
+-------------------
+- Ny knapp under "Verktoy...": "Kjor TM5 (minnetest, RAM-stabilitet)...".
+  CoreCycler/Manageren tester KUN CPU-kjernene - aldri selve RAM-en/
+  minnekontrolleren. En feil i en bredere test (f.eks. OCCT "CPU + RAM")
+  kan derfor like gjerne komme fra RAM/Infinity Fabric som fra en Curve
+  Optimizer-verdi. TM5 (TestMem5) er et velkjent community-verktoy for
+  a isolere nettopp dette. Manageren bundler IKKE selve TM5-binaeren
+  (uklare distribusjonsrettigheter for community-configene) - du peker
+  selv til din egen TM5.exe forste gang, stien lagres deretter. Velg
+  config-filen (f.eks. anta777/1usmus) inni TM5 sitt eget vindu - det
+  finnes ingen palitelig kommandolinje-syntaks a styre dette med
+- MemTest86 ble vurdert, men kan IKKE integreres: det er en boot-tids-
+  test som kjorer fra en USB-pinne FOR Windows starter, og har derfor
+  ingen mate a vises/styres fra et Windows-program i det hele tatt.
+  Nevnt med en kort forklaring i bruksveiledningen i stedet
 
 Nyheter i v0.8.7.8
 -------------------
