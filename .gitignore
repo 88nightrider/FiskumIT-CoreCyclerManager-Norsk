@@ -20,6 +20,7 @@
 !/Update-FiskumITCoreCyclerManager.ps1
 !/Manager/
 !/CoreCycler/
+!/IntelVoltageControlPawnIO-patch/
 
 # Fiskum IT: kjøretids-/sesjonsspesifikk tilstand for DENNE maskinen - genereres
 # automatisk på nytt ved første kjøring (se New-DefaultState/Get-State/Ensure-Directory),
