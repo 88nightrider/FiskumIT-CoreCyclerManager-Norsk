@@ -1,5 +1,21 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.10
+﻿Fiskum IT CoreCycler Manager v0.8.7.11
 ============================================================
+
+Nyheter i v0.8.7.11
+-------------------
+- PawnIO-patchen for IntelVoltageControl (forberedt i v0.8.7.10) er na
+  BYGGET OG BEKREFTET FUNGERENDE - testet pa ekte Intel-maskinvare
+  (i5-6300U): bade "show" (les MSR 0x150 via PawnIO) og "set" (skriv MSR
+  0x150 via PawnIO) gir exit code 0 og korrekt formatert output, identisk
+  med det Manageren allerede forventer. WinRing0x64.sys/.dll er fjernet -
+  IntelVoltageControl.exe bruker na PawnIO som default, ikke WinRing0
+- PawnIO-driveren (CoreCycler\tools\PawnIO\PawnIO_setup.exe, bundlet)
+  krever en engangs, manuell GUI-installasjon - grundig testet at INGEN
+  stille installasjonsflagg finnes (/quiet, /passive, /silent, /S, /s,
+  --quiet gir alle samme feil - bekreftet at selv FanControl, som ogsa
+  bruker PawnIO, krever det samme). Installer.bat starter na
+  installasjonsvinduet automatisk (ikke-blokkerende) for Intel-CPUer der
+  driveren ikke allerede er installert
 
 Nyheter i v0.8.7.10
 -------------------

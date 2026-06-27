@@ -197,6 +197,34 @@ if %ERRORLEVEL%==0 (
 )
 
 REM ------------------------------------------------------------
+REM PawnIO-driver for Intel-spenningskontroll (kun relevant for Intel-CPUer)
+REM Fiskum IT (v0.8.7.10): IntelVoltageControl.exe bruker na PawnIO i stedet for
+REM WinRing0 (WinRing0 flagges av antivirus siden mars 2025, CVE-2020-14979-
+REM bekreftet via egen testing/research, traff ALLE store WinRing0-verktoy, ikke
+REM unikt for var bundlede kopi). Patchen er bygget og BEKREFTET FUNGERENDE
+REM (les+skriv MSR 0x150 testet pa ekte Intel-maskinvare).
+REM
+REM PawnIO-driveren krever en EN GANGS, MANUELL GUI-installasjon - INGEN stille
+REM installasjonsflagg finnes (grundig testet: /quiet, /passive, /silent, /S,
+REM /s, --quiet gir alle samme feil - selv FanControl, som ogsa bruker PawnIO,
+REM krever manuell installasjon). Starter derfor installasjonsvinduet her
+REM (IKKE-blokkerende - "start" venter IKKE pa at brukeren fullforer den) KUN
+REM hvis CPU-en er Intel OG driveren ikke allerede er installert fra for.
+REM ------------------------------------------------------------
+set "CPU_MANUFACTURER="
+for /f "delims=" %%I in ('powershell.exe -NoProfile -Command "(Get-CimInstance Win32_Processor).Manufacturer" 2^>nul') do set "CPU_MANUFACTURER=%%I"
+sc query PawnIO >nul 2>&1
+if "%CPU_MANUFACTURER%"=="GenuineIntel" if errorlevel 1 (
+    echo.
+    echo Du har en Intel-CPU. Spenningskontroll ^(undervolting^) krever PawnIO-
+    echo driveren, som krever en engangs, manuell installasjon ^(kan ikke
+    echo automatiseres - se CoreCycler\tools\IntelVoltageControl\PawnIO-patch\
+    echo BYGG-OG-PATCH-README.txt^). Starter installasjonsvinduet na - fullfor
+    echo det for spenningskontroll skal fungere ^(kan ogsa gjores senere^):
+    start "" "%TARGET_CORECYCLER%\tools\PawnIO\PawnIO_setup.exe"
+)
+
+REM ------------------------------------------------------------
 REM Skrivebordssnarvei
 REM ------------------------------------------------------------
 > "%SHORTCUT_PS1%" echo $Desktop = [Environment]::GetFolderPath('Desktop')
