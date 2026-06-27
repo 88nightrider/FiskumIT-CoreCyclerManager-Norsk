@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.12'
+$ManagerVersion = '0.8.7.13'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -5397,6 +5397,13 @@ function Build-Ui {
     $lblVersion.Font = New-Object System.Drawing.Font('Segoe UI',8)
     $header.Controls.Add($lblVersion)
 
+    # Fiskum IT (v0.8.7.13): flyttet fra "Handlinger" til ovre hoyre hjorne, rett under
+    # versjonsmerkingen (brukerens tilbakemelding) - na alltid synlig uten a matte rulle ned
+    # i hoyre kolonne, og samme bredde/X som $lblVersion over den
+    $btnExit = New-Button -Text 'Avslutt' -X 1160 -Y 32 -W 104 -H 30
+    $btnExit.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
+    $header.Controls.Add($btnExit)
+
     # Fiskum IT (v0.8.7.12): vinduet er na delt i to faste kolonner under headeren -
     # "Siste CoreCycler-logg" ($groupLog, se langt under) i en egen, FAST venstre kolonne
     # som bruker hele vinduets hoyde (lost det gjentatte "loggen forsvinner/klippes nederst
@@ -5407,10 +5414,13 @@ function Build-Ui {
     # det er na bevisst forlatt (brukerens eget valg) for at hele resten av innholdet skal
     # fa plass i den smalere hoyre kolonnen uten at noen av de andre boksene (Modus etc.)
     # ma bli enda smalere
+    # Fiskum IT (v0.8.7.13): venstre kolonne smalnet fra 592 til 500 (brukerens
+    # tilbakemelding - logg-kolonnen hadde mer bredde enn den trengte), bredden ble gitt til
+    # hoyre kolonne (640 -> 732) i stedet for a krympe totalbredden 1280 (last)
     $kolonneVenstreX  = 16
-    $kolonneVenstreW  = 592
+    $kolonneVenstreW  = 500
     $kolonneHoyreX    = $kolonneVenstreX + $kolonneVenstreW + 16
-    $kolonneHoyreW    = 640
+    $kolonneHoyreW    = 732
     $kolonneToppY     = 104
 
     $mainPanel = New-Object System.Windows.Forms.Panel
@@ -5427,7 +5437,7 @@ function Build-Ui {
     $groupStatus = New-Object System.Windows.Forms.GroupBox
     $groupStatus.Text = 'Status'
     $groupStatus.Location = New-Object System.Drawing.Point(16,8)
-    $groupStatus.Size = New-Object System.Drawing.Size(596,260)
+    $groupStatus.Size = New-Object System.Drawing.Size(688,260)
     $groupStatus.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupStatus.BackColor = $panelBackColor
     $groupStatus.ForeColor = $panelForeColor
@@ -5436,7 +5446,7 @@ function Build-Ui {
     $groupActions = New-Object System.Windows.Forms.GroupBox
     $groupActions.Text = 'Handlinger'
     $groupActions.Location = New-Object System.Drawing.Point(16,278)
-    $groupActions.Size = New-Object System.Drawing.Size(596,260)
+    $groupActions.Size = New-Object System.Drawing.Size(688,260)
     $groupActions.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupActions.BackColor = $panelBackColor
     $groupActions.ForeColor = $panelForeColor
@@ -5490,7 +5500,6 @@ function Build-Ui {
     $btnVerktoy = New-Button -Text 'Verktøy...' -X 364 -Y 34 -W 180
 
     $btnHjelp = New-Button -Text 'Hjelp' -X 22 -Y 82 -W 140
-    $btnExit = New-Button -Text 'Avslutt' -X 454 -Y 130 -W 130
 
     $chkAutoContinue = New-Object System.Windows.Forms.CheckBox
     $chkAutoContinue.Text = 'Start neste test automatisk'
@@ -5517,7 +5526,6 @@ function Build-Ui {
         $btnStop,
         $btnVerktoy,
         $btnHjelp,
-        $btnExit,
         $chkAutoContinue,
         $lblHint,
         $lblHint2,
@@ -5528,11 +5536,14 @@ function Build-Ui {
     $groupModus.Text = 'Modus'
     # Fiskum IT (v0.8.2): Y er na relativ til $mainPanel (rullbar), ikke $form direkte.
     # Fiskum IT (v0.8.7.12): flyttet ned under Status+Handlinger (na ogsa i $mainPanel, se
-    # over) og smalnet inn fra 1214 til 596 - se reflyt av $chkAutoSwitch/$lblModusHint/
+    # over) og smalnet inn fra 1214 til 688 - se reflyt av $chkAutoSwitch/$lblModusHint/
     # $lblUndervoltStotte under (stablet i stedet for side-ved-side med radioknappene, og
     # hoyere boks for a fa plass til flere tekstbrytingslinjer i den smalere bredden)
+    # Fiskum IT (v0.8.7.13): hoyden komprimert fra 330 til 230 (brukerens tilbakemelding -
+    # for mye apent rom) - se tettere Y-plassering av alle kontroller under, samt at den
+    # bredere boksen (688, var 596) lar tekstene under bruke faerre linjer
     $groupModus.Location = New-Object System.Drawing.Point(16,548)
-    $groupModus.Size = New-Object System.Drawing.Size(596,330)
+    $groupModus.Size = New-Object System.Drawing.Size(688,230)
     $groupModus.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupModus.BackColor = $panelBackColor
     $groupModus.ForeColor = $panelForeColor
@@ -5545,8 +5556,8 @@ function Build-Ui {
 
     $radioAssistert = New-Object System.Windows.Forms.RadioButton
     $radioAssistert.Text = 'Aggressivt undervolt-søk (finn grensen per kjerne)'
-    $radioAssistert.Location = New-Object System.Drawing.Point(18,26)
-    $radioAssistert.Size = New-Object System.Drawing.Size(560,24)
+    $radioAssistert.Location = New-Object System.Drawing.Point(18,20)
+    $radioAssistert.Size = New-Object System.Drawing.Size(652,22)
     $radioAssistert.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $radioAssistert.FlatStyle = 'Flat'
 
@@ -5565,39 +5576,39 @@ function Build-Ui {
 
     $radioStabilitet = New-Object System.Windows.Forms.RadioButton
     $radioStabilitet.Text = 'Stabilitetstest (auto-juster ved feil)'
-    $radioStabilitet.Location = New-Object System.Drawing.Point(18,54)
-    $radioStabilitet.Size = New-Object System.Drawing.Size(560,24)
+    $radioStabilitet.Location = New-Object System.Drawing.Point(18,44)
+    $radioStabilitet.Size = New-Object System.Drawing.Size(652,22)
     $radioStabilitet.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $radioStabilitet.Checked = $true
     $radioStabilitet.ForeColor = $panelForeColor
     $radioStabilitet.FlatStyle = 'Flat'
 
-    $btnAvansert = New-Button -Text 'Avansert...' -X 18 -Y 84 -W 160 -H 30
+    $btnAvansert = New-Button -Text 'Avansert...' -X 18 -Y 70 -W 160 -H 28
 
     # Fiskum IT: holdes alltid Enabled=$true - se Update-AssistertUiEnabled for hvorfor
     # (CheckBox.Enabled=$false tvinger gjennom en for mork, darlig lesbar tekstfarge fra
     # Windows uavhengig av FlatStyle/ForeColor). "Ikke relevant na" vises i stedet med en
     # dimmet ForeColor, satt av Update-AssistertUiEnabled like etter UI'et er bygget
     # Fiskum IT (v0.8.7.12): flyttet fra "ved siden av" radioknappene (X=490) til "under"
-    # btnAvansert - se ny, smalere $groupModus-bredde (596, var 1214) over
+    # btnAvansert - se ny, smalere $groupModus-bredde (688, var 1214) over
     $chkAutoSwitch = New-Object System.Windows.Forms.CheckBox
     $chkAutoSwitch.Text = 'Gå automatisk videre til Stabilitetstest (auto-juster ved feil) når Aggressivt undervolt-søk er fullført'
-    $chkAutoSwitch.Location = New-Object System.Drawing.Point(18,124)
-    $chkAutoSwitch.Size = New-Object System.Drawing.Size(560,64)
+    $chkAutoSwitch.Location = New-Object System.Drawing.Point(18,102)
+    $chkAutoSwitch.Size = New-Object System.Drawing.Size(652,40)
     $chkAutoSwitch.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $chkAutoSwitch.Checked = $true
     $chkAutoSwitch.Enabled = $true
     $chkAutoSwitch.ForeColor = $panelForeColor
     $chkAutoSwitch.FlatStyle = 'Flat'
 
-    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Stabilitetstest (auto-juster ved feil).' -X 18 -Y 192 -W 560 -H 36
+    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Stabilitetstest (auto-juster ved feil).' -X 18 -Y 144 -W 652 -H 20
 
     # Fiskum IT: marker hvilken CPU som er oppdaget og hvorfor Assistert undervolting
     # er (eller ikke er) tilgjengelig - se Get-UndervoltStotteInfo
-    # H=80 (v0.8.7.12, var 40): smalere bredde (560, var 1170) gir flere tekstbrytingslinjer
-    # for KortStatus-teksten - lar etiketten brette i stedet for a klippes/overlappe
+    # H=44 (v0.8.7.13, var 80/40): bredere boks (688, var 596) gir KortStatus-teksten faerre
+    # tekstbrytingslinjer - lar etiketten fortsatt brette i stedet for a klippes/overlappe
     # GroupBox-en under (WinForms Label bretter automatisk nar AutoSize=false, som er default)
-    $lblUndervoltStotte = New-Label -Text ('CPU oppdaget: {0} - {1}' -f $undervoltStotte.CpuNavn, $undervoltStotte.KortStatus) -X 18 -Y 232 -W 560 -H 80
+    $lblUndervoltStotte = New-Label -Text ('CPU oppdaget: {0} - {1}' -f $undervoltStotte.CpuNavn, $undervoltStotte.KortStatus) -X 18 -Y 168 -W 652 -H 44
     $lblUndervoltStotte.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupModus.Controls.AddRange(@(
@@ -5611,12 +5622,12 @@ function Build-Ui {
 
     # Fiskum IT (v0.8.2): ny GroupBox satt inn MELLOM groupModus og groupProgress -
     # groupModus var allerede full (6 kontroller), og alt under denne flyttes 150px ned.
-    # Fiskum IT (v0.8.7.12): smalnet inn fra 1214 til 596 - se reflyt av hint-labelene under
+    # Fiskum IT (v0.8.7.12): smalnet inn fra 1214 til 688 - se reflyt av hint-labelene under
     # (na flere tekstbrytingslinjer i stedet for en lang enkel linje)
     $groupGjenoppretting = New-Object System.Windows.Forms.GroupBox
     $groupGjenoppretting.Text = 'Automatisk gjenoppretting'
-    $groupGjenoppretting.Location = New-Object System.Drawing.Point(16,888)
-    $groupGjenoppretting.Size = New-Object System.Drawing.Size(596,206)
+    $groupGjenoppretting.Location = New-Object System.Drawing.Point(16,788)
+    $groupGjenoppretting.Size = New-Object System.Drawing.Size(688,206)
     $groupGjenoppretting.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupGjenoppretting.BackColor = $panelBackColor
     $groupGjenoppretting.ForeColor = $panelForeColor
@@ -5646,10 +5657,10 @@ function Build-Ui {
     $numRestartWaitMinutes.BackColor = $panelBackColor
     $numRestartWaitMinutes.ForeColor = $panelForeColor
 
-    $lblGjenopprettingHint = New-Label -Text '"Aktiv" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 98 -W 560 -H 44
+    $lblGjenopprettingHint = New-Label -Text '"Aktiv" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 98 -W 652 -H 44
     $lblGjenopprettingHint.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
-    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 146 -W 560 -H 44
+    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 146 -W 652 -H 44
     $lblGjenopprettingHint2.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupGjenoppretting.Controls.AddRange(@(
@@ -5664,11 +5675,11 @@ function Build-Ui {
     $groupProgress = New-Object System.Windows.Forms.GroupBox
     $groupProgress.Text = 'Fremdrift'
     # Fiskum IT (v0.8.7.12): flyttet ned under groupGjenoppretting (na ogsa smalnet inn til
-    # 596, var 1214) - se reflyt av $progress/$lblProgressValue/$lblTidValue under
-    $groupProgress.Location = New-Object System.Drawing.Point(16,1104)
+    # 688, var 1214) - se reflyt av $progress/$lblProgressValue/$lblTidValue under
+    $groupProgress.Location = New-Object System.Drawing.Point(16,1004)
     # Fiskum IT (v0.8.7.6): hevet fra 90 til 116 for a fa plass til den nye
     # tidsestimat-raden ($lblTidValue) under selve fremdriftsbaren
-    $groupProgress.Size = New-Object System.Drawing.Size(596,142)
+    $groupProgress.Size = New-Object System.Drawing.Size(688,142)
     $groupProgress.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupProgress.BackColor = $panelBackColor
     $groupProgress.ForeColor = $panelForeColor
@@ -5679,7 +5690,7 @@ function Build-Ui {
     # mork, og selve baren er fortsatt godt synlig
     $progress = New-Object System.Windows.Forms.ProgressBar
     $progress.Location = New-Object System.Drawing.Point(18,32)
-    $progress.Size = New-Object System.Drawing.Size(560,24)
+    $progress.Size = New-Object System.Drawing.Size(652,24)
     $progress.Minimum = 0
     $progress.Maximum = 100
     $progress.Value = 0
@@ -5687,15 +5698,15 @@ function Build-Ui {
     $progress.ForeColor = [System.Drawing.Color]::FromArgb(13,234,160)
 
     # Fiskum IT (v0.8.7.12): flyttet under fremdriftsbaren (var til hoyre for den, X=1010) -
-    # ikke nok bredde til a sta side-ved-side i den smalere groupProgress (596, var 1214)
+    # ikke nok bredde til a sta side-ved-side i den smalere groupProgress (688, var 1214)
     $lblProgressValue = New-Label -Text '0/0 tester (0%)' -X 18 -Y 60 -W 300 -H 22 -Bold $true
 
     # Fiskum IT (v0.8.7.6): ca. kalkulert tidsbruk/tid igjen - se Get-FremdriftTidTekst.
     # Ikke fet skrift (mindre fremtredende enn selve fremdriften over) og en nedtonet
     # farge, siden dette alltid er et "ca."-anslag, ikke en garanti.
-    # Fiskum IT (v0.8.7.12): H hevet til 40 (var 22) - smalere bredde (560, var 1172) kan na
+    # Fiskum IT (v0.8.7.12): H hevet til 40 (var 22) - smalere bredde (652, var 1172) kan na
     # bryte teksten til 2 linjer
-    $lblTidValue = New-Label -Text '' -X 18 -Y 86 -W 560 -H 40
+    $lblTidValue = New-Label -Text '' -X 18 -Y 86 -W 652 -H 40
     $lblTidValue.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupProgress.Controls.AddRange(@(

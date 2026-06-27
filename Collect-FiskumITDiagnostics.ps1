@@ -3,7 +3,7 @@
   Samler relevante CoreCycler/Manager-feillogger i et arkiv og sletter originale logger.
 
 .DESCRIPTION
-  Skriptet pakker loggfiler fra nåværende workspace og Feil-mappen til en arkivfil på skrivebordet.
+  Skriptet pakker loggfiler fra nåværende workspace og "Loggfiler for utvikling"-mappen til en arkivfil på skrivebordet.
   Det legger også ved en systeminformasjonsfil med operativsystem, CPU, RAM og annen diagnostisk informasjon.
   Arkivfilen bruker filtypen .diag for å gjøre det mindre umiddelbart å redigere innholdet.
 
@@ -36,12 +36,13 @@ function Ensure-Administrator {
 Ensure-Administrator
 Set-StrictMode -Version Latest
 
-function Find-FeilFolder {
-    # Fiskum IT: "Feil" er en valgfri, ekstra kilde - kun relevant i utviklingstreet, hvor
-    # kryss-maskin-logger legges manuelt for videre analyse. Den er IKKE en del av en vanlig
-    # installasjon (der ligger scriptet rett ved siden av Manager\/CoreCycler\, uten noen
-    # "Feil"-mappe i nærheten) - sjekk derfor noen nivaer oppover, men det er helt greit om
-    # den ikke finnes noe sted
+function Find-LoggfilerForUtviklingFolder {
+    # Fiskum IT (v0.8.7.12): omdopt fra "Feil" - "Loggfiler for utvikling" er en valgfri,
+    # ekstra kilde - kun relevant i utviklingstreet, hvor kryss-maskin-logger legges manuelt
+    # for videre analyse. Den er IKKE en del av en vanlig installasjon (der ligger scriptet
+    # rett ved siden av Manager\/CoreCycler\, uten noen "Loggfiler for utvikling"-mappe i
+    # nærheten) - sjekk derfor noen nivaer oppover, men det er helt greit om den ikke finnes
+    # noe sted
     param(
         [string]$StartPath
     )
@@ -53,7 +54,7 @@ function Find-FeilFolder {
             break
         }
 
-        $candidate = Join-Path $current 'Feil'
+        $candidate = Join-Path $current 'Loggfiler for utvikling'
 
         if (Test-Path -LiteralPath $candidate -PathType Container) {
             return $candidate
@@ -281,9 +282,9 @@ $defaultSources = [System.Collections.Generic.List[string]]::new()
 $defaultSources.Add((Join-Path $workspaceRoot 'Manager\logs'))
 $defaultSources.Add((Join-Path $workspaceRoot 'CoreCycler\logs'))
 
-$feilFolder = Find-FeilFolder -StartPath $workspaceRoot
-if ($feilFolder) {
-    $defaultSources.Add($feilFolder)
+$loggfilerForUtviklingFolder = Find-LoggfilerForUtviklingFolder -StartPath $workspaceRoot
+if ($loggfilerForUtviklingFolder) {
+    $defaultSources.Add($loggfilerForUtviklingFolder)
 }
 
 $sourceFolders = @()

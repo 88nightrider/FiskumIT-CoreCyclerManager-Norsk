@@ -158,7 +158,8 @@ sammenblandingen.
 explorer.exe så ut til å restarte) under en EGENDEFINERT, mye tyngre
 "Assistert undervolting"-test (8 ulike yCruncher-deltester à 60 sek hver,
 `mode=19-ZN2` hardkodet i stedet for `auto`, kjørt sammenhengende i ca. 17
-timer - se `AssistedUndervolting_Ryzen.ini` i `Feil`-mappen for den faktiske
+timer - se `AssistedUndervolting_Ryzen.ini` i `Loggfiler for utvikling`-mappen
+(het tidligere `Feil`) for den faktiske
 konfigurasjonen som ble brukt). Brukerens egen hypotese var i utgangspunktet
 at de testede Curve Optimizer-verdiene var blitt for aggressive.
 
@@ -233,7 +234,8 @@ største historiske høyden (en kjent WinForms-kvirk). Fikset ved å sette
 `Anchor` på `$groupLog` og tvinge `AutoScrollMinSize` til å regnes på nytt
 ved `Add_Resize`. **Denne fiksen var IKKE tilstrekkelig** - bekreftet på
 nytt via to skjermbilder fra brukeren på en høyere-oppløsning-skjerm
-(`Feil`-mappen), lenge etter at v0.8.7 var utgitt.
+(`Loggfiler for utvikling`-mappen, het tidligere `Feil`), lenge etter at
+v0.8.7 var utgitt.
 
 **Faktisk rotårsak (funnet v0.8.7.8, via diagnostikk lagt til under
 utvikling)**: en midlertidig `Add-Content`-logglinje som skrev ut
@@ -261,3 +263,69 @@ tilbake ned igjen etterpå" (bilde 2-symptomet, der feltet tidligere la seg
 over alt annet innhold) - ingen mørk blokk i noen av tilfellene etter
 fiksen. Diagnostikk-logglinjen ble fjernet igjen før utgivelse, siden den
 kun var nødvendig for å bekrefte rotårsaken under selve utviklingen.
+
+## 8. Tekstbryting i Hjelp/Oppdatering-vinduene - v0.8.7.3-fiksen var IKKE nok (v0.8.7.12)
+
+**Symptom rapportert av bruker**: to skjermbilder (`Loggfiler for
+utvikling`-mappen) viste at teksten i "Hjelp"-vinduet fortsatt forsvant ut
+til høyre i stedet for å brytes til ny linje, til tross for at `WordWrap` og
+`ScrollBars='Vertical'` allerede var satt (v0.8.7.3-fiksen, se README.txt).
+
+**Faktisk rotårsak**: reprodusert isolert (egen, minimal WinForms-test
+utenfor selve Manager-koden) - `RichTextBox.RightMargin` (standardverdi `0`)
+er den egenskapen som FAKTISK styrer hvor teksten brytes, og den oppdateres
+ALDRI automatisk til kontrollens egen bredde, uavhengig av `WordWrap`/
+`ScrollBars`. v0.8.7.3-fiksen løste et ekte delproblem (den synlige
+horisontale scrollbaren), men adresserte ikke selve brytepunktet.
+
+**Fiks**: `$txt.RightMargin = $txt.ClientSize.Width` satt eksplisitt rett
+etter `.Text` i både `Show-BrukerveiledningDialog` og
+`Show-OppdateringTilgjengeligDialog`, pluss en `Add_Resize`-handler som
+setter den på nytt (siden `RightMargin` er en FAST pikselverdi, ikke
+relativ/automatisk - akkurat som `$groupLog`/`$mainPanel` sin høyde i punkt 7
+over måtte settes eksplisitt, ikke via `Anchor`).
+
+**Verifisert**: isolert skjermbilde-test (ekte skjermdump, ikke
+`DrawToBitmap` - den metoden viste seg å ikke rendre RichTextBox-innhold
+korrekt for denne typen verifisering) bekreftet teksten brytes korrekt
+innenfor vinduets bredde etter fiksen, ved den faktiske standardstørrelsen
+til dialogen.
+
+## 9. Hovedvindu-redesign: egen venstrekolonne for loggen, kompakt høyrekolonne (v0.8.7.12-v0.8.7.13)
+
+**Bakgrunn**: punkt 7 løste at `$groupLog` fikk riktig høyde, men løste ikke
+det underliggende problemet at loggen var SISTE element i en vertikalt
+stablet, rullbar kolonne - på mindre skjermer/vinduer ble den fortsatt presset
+ned til et minimum (150px), siden alt annet innhold (Status, Handlinger,
+Modus, Automatisk gjenoppretting, Fremdrift) krevde plass FØRST.
+
+**Løsning (v0.8.7.12)**: vinduet delt i to faste kolonner under headeren -
+`$groupLog` parentert direkte på `$form` (IKKE inni `$mainPanel` lenger) i en
+egen, fast VENSTRE kolonne som bruker hele vinduets høyde, uavhengig av
+resten av innholdet. ALT annet innhold (inkl. Status/Handlinger, som
+tidligere lå i en egen ikke-rullbar topp-sone) flyttet inn i en smalere,
+rullbar `$mainPanel` til høyre. Vinduets bredde hevet fra 1260 til 1280
+(fortsatt låst) for å gi plass til den nye kolonnen uten å gjøre høyre
+kolonne for smal. `Update-MainPanelLayout` forenklet betraktelig: siden
+`$groupLog` ikke lenger er inni `$mainPanel`, kan `$mainPanel` sin
+`AutoScrollMinSize` nå settes ÉN gang (stabelen har fast høyde), og
+`$groupLog` sin høyde regnes ut direkte fra `$form.ClientSize.Height` - samme
+mønster, men enklere enn punkt 7 sin opprinnelige versjon.
+
+**Justering (v0.8.7.13)**: brukerens tilbakemelding - "Modus"-boksen hadde
+for mye åpent rom (radioknapper/avkrysningsboks/hint-tekster spredt med
+unødvendig store mellomrom), venstrekolonnen var bredere enn nødvendig for
+loggtekst, og "Avslutt"-knappen burde være lettere tilgjengelig. Endringer:
+- Venstrekolonne smalnet fra 592 til 500px, bredden gitt til høyrekolonnen
+  (640 → 732px) i stedet for å krympe totalbredden.
+- "Modus"-boksen komprimert fra 330 til 230px høyde (tettere Y-plassering av
+  alle kontroller, samt at den bredere boksen gir kortere status-teksten
+  færre tekstbrytingslinjer).
+- "Avslutt" flyttet fra "Handlinger" til øvre høyre hjørne i headeren, rett
+  under versjonsmerkingen - alltid synlig uten å rulle.
+
+**Verifisert**: isolert layout-test (samme geometri som faktisk kode) med
+ekte skjermdump ved både standard (900px) og minimum (540px) vindushøyde -
+ingen klipping, ingen uventet horisontal scrollbar (en reell, observert
+bivirkning av for trange `GroupBox`-bredder relativt til `$mainPanel` sin
+vertikale scrollbar-bredde - måtte justeres med ca. 12px ekstra margin).

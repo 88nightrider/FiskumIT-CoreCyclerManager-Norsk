@@ -1,5 +1,19 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.12
+﻿Fiskum IT CoreCycler Manager v0.8.7.13
 ============================================================
+
+Nyheter i v0.8.7.13
+-------------------
+- "Modus"-boksen i UI-et komprimert betydelig (mindre apent rom mellom
+  radioknapper, "Avansert..."-knappen, avkrysningsboksen og hint-tekstene)
+- "Avslutt"-knappen flyttet fra "Handlinger" til ovre hoyre hjorne, rett
+  under versjonsmerkingen - alltid synlig uten a matte rulle ned
+- Venstre kolonne ("Siste CoreCycler-logg") smalnet litt inn - bredden ble
+  gitt til den hoyre kolonnen i stedet for a krympe vinduet (fortsatt 1280
+  totalt, last)
+- Intern opprydding: "Feil"-mappen (utviklingsmaskin-diagnostikk) omdopt til
+  "Loggfiler for utvikling" for et tydeligere navn. Fjernet ca. 1,7 GB gamle,
+  foreldede pre-utgivelse .zip-arkiver og et ubrukt dev-sjekk-skript fra
+  repo-roten (rene lokale, ikke-versjonerte filer uten lopende funksjon)
 
 Nyheter i v0.8.7.12
 -------------------

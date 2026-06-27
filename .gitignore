@@ -1,8 +1,8 @@
 # Fiskum IT: dette repoet skal inneholde den aktive utgaven (flat struktur i roten, uten
 # versjonsstempling i mappenavn - versjonering skjer via git-tags/GitHub Releases) +
-# dokumentasjon i roten. Eldre lokale versjonsmapper (v0.3-v0.8.1), store .zip-utgivelser
-# ("1.zip files\"), diagnostikkdumper fra ekte testmaskiner ("Feil\") og lokale Claude
-# Code-innstillinger (".claude\") er bevisst utelatt.
+# dokumentasjon i roten. Diagnostikkdumper/loggfiler fra ekte testmaskiner
+# ("Loggfiler for utvikling\", tidligere "Feil\"), brukerens egne notater
+# ("forslag.txt") og lokale Claude Code-innstillinger (".claude\") er bevisst utelatt.
 /*
 !/.gitignore
 !/.gitattributes
