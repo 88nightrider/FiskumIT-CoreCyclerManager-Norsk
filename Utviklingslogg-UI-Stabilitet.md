@@ -218,3 +218,46 @@ feilmeldingene i begge logger (motor + Manager) i den faktiske `.diag`-
 pakken fra NR-GAMER, ikke antatt. `ClearUndo()`-fiksen er syntaktisk
 verifisert (AST-parser) og distribuert, men IKKE årsaks-verifisert mot et
 nytt 17-timers forløp (upraktisk å reprodusere i utviklingsøkten).
+
+## 7. Den gjenoppstående "mørke blokken" nederst i vinduet (v0.8.7 og v0.8.7.8)
+
+**Symptom rapportert av bruker**: på skjermer med høyere oppløsning, hvis
+vinduet ble satt til en større høyde enn standard, fikk man et mørkt
+(bakgrunnsfarget) felt nederst i vinduet ved neste åpning - i samme høyde
+som utvidelsen. Feltet forsvant IKKE når vinduet senere ble krympet igjen,
+og la seg da OVER alt annet innhold i vinduet.
+
+**Første forsøk (v0.8.7)**: antok at `$groupLog` (loggboksen) manglet riktig
+`Anchor`, og at `$mainPanel` sin `AutoScrollMinSize` satt seg fast på den
+største historiske høyden (en kjent WinForms-kvirk). Fikset ved å sette
+`Anchor` på `$groupLog` og tvinge `AutoScrollMinSize` til å regnes på nytt
+ved `Add_Resize`. **Denne fiksen var IKKE tilstrekkelig** - bekreftet på
+nytt via to skjermbilder fra brukeren på en høyere-oppløsning-skjerm
+(`Feil`-mappen), lenge etter at v0.8.7 var utgitt.
+
+**Faktisk rotårsak (funnet v0.8.7.8, via diagnostikk lagt til under
+utvikling)**: en midlertidig `Add-Content`-logglinje som skrev ut
+`$mainPanel.Size`/`.ClientSize` ved ulike tidspunkt (rett etter `Build-Ui`,
+ved `Add_Resize`, ved `Add_Shown`) avdekket at `$mainPanel` sin EGEN
+`Anchor=Bottom` (relativt til `$form`) ALDRI strekker høyden korrekt - selv
+etter `PerformLayout()` og selv etter at vinduet faktisk er vist
+(`Add_Shown`). Bredden strekker korrekt (`Anchor=Right` virker fint), men
+høyden sitter fast på design-tids-verdien. Dette er et kjent WinForms-
+samspill der `AutoScroll=$true` forstyrrer normal `Anchor`-høyde-resizing
+langs selve scroll-aksen - v0.8.7-fiksen adresserte kun `$groupLog` sin
+Anchor (inni panelet), ikke `$mainPanel` sin EGEN Anchor (mot vinduet), som
+var det faktiske, dypere problemet.
+
+**Fiks (v0.8.7.8)**: ny funksjon `Update-MainPanelLayout` som setter BÅDE
+`$mainPanel` og `$groupLog` sin høyde EKSPLISITT via kode (ikke `Anchor`) -
+`$mainPanel.Size` beregnes fra `$App.Ui.Form.ClientSize.Height`, uavhengig
+av Anchor helt. Fjernet `Bottom` fra `Anchor` på begge kontrollene (kun
+`Top,Left,Right` igjen). Kalt ved oppstart (`Add_Shown`) og ved hvert
+`Add_Resize`.
+
+**Verifisert**: skjermbilder bekreftet BÅDE scenarioet "åpne med en stor
+lagret vindushøyde" (det opprinnelige bilde 1-symptomet) OG "krympe vinduet
+tilbake ned igjen etterpå" (bilde 2-symptomet, der feltet tidligere la seg
+over alt annet innhold) - ingen mørk blokk i noen av tilfellene etter
+fiksen. Diagnostikk-logglinjen ble fjernet igjen før utgivelse, siden den
+kun var nødvendig for å bekrefte rotårsaken under selve utviklingen.
