@@ -1,5 +1,14 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.14
+﻿Fiskum IT CoreCycler Manager v0.8.7.15
 ============================================================
+
+Nyheter i v0.8.7.15
+-------------------
+- Fikset at versjonsmerkingen og "Avslutt"-knappen drev mot venstre nar
+  vinduet ble utvidet i bredde (sett av bruker etter v0.8.7.14). Rotarsak:
+  selve topp-feltet (headeren) hadde ingen Anchor satt og strakk seg derfor
+  ikke i bredde - versjonsmerkingen/"Avslutt" var korrekt forankret til
+  HEADERENS hoyre kant, men headeren selv ble liggende fast i bredde mens
+  vinduet rundt den ble bredere
 
 Nyheter i v0.8.7.14
 -------------------

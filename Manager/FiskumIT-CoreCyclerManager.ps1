@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.14'
+$ManagerVersion = '0.8.7.15'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -5364,6 +5364,12 @@ function Build-Ui {
     $header = New-Object System.Windows.Forms.Panel
     $header.Location = New-Object System.Drawing.Point(0,0)
     $header.Size = New-Object System.Drawing.Size(1280,96)
+    # Fiskum IT (v0.8.7.15): Anchor=Right lagt til - uten denne strakk IKKE $header seg selv
+    # i bredde nar vinduet ble utvidet (bredden er ikke lenger last, se $form.MaximumSize.
+    # Width), sa $lblVersion/$btnExit (anchoret Top,Right MOT $header, ikke mot $form) ble
+    # liggende fast pa $header sin opprinnelige, stillestaende hoyre kant - sa ut som de
+    # "drev til venstre" etter hvert som vinduet ble bredere rundt dem (bekreftet av bruker)
+    $header.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $header.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
     $form.Controls.Add($header)
 
