@@ -435,6 +435,20 @@ Describe 'Get-EstimertTestVarighetSekunder' {
         Get-EstimertTestVarighetSekunder -ConfigPath $iniPath | Should Be $null
     }
 
+    It 'RuntimePerCoreOverride overstyrer filens egen runtimePerCore (Avansert-valg-bug)' {
+        # Fiskum IT (v0.8.7.12): regresjonstest for bekreftet bug - estimatet matte ALLTID
+        # filens egen "5m" uavhengig av en valgt varighet i Avansert-dialogen
+        $iniPath = Join-Path $midlertidigIniMappe 'overstyrt.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'runtimePerCore = 5m') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath -RuntimePerCoreOverride '1m' | Should Be 60
+    }
+
+    It 'RuntimePerCoreOverride tom/null bruker fortsatt filens egen verdi' {
+        $iniPath = Join-Path $midlertidigIniMappe 'ikkeoverstyrt.ini'
+        Set-Content -LiteralPath $iniPath -Value @('[General]', 'runtimePerCore = 5m') -Encoding UTF8
+        Get-EstimertTestVarighetSekunder -ConfigPath $iniPath -RuntimePerCoreOverride '' | Should Be 300
+    }
+
     Remove-Item -LiteralPath $midlertidigIniMappe -Recurse -Force -ErrorAction SilentlyContinue
 }
 

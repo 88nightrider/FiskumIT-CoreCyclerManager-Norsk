@@ -1,5 +1,23 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.11
+﻿Fiskum IT CoreCycler Manager v0.8.7.12
 ============================================================
+
+Nyheter i v0.8.7.12
+-------------------
+- Fikset tekstbryting i "Hjelp"-vinduet og "Oppdatering tilgjengelig"-vinduet:
+  teksten kunne forsvinne ut til hoyre i stedet for a brytes til ny linje,
+  selv med WordWrap aktivert. Rotarsak: RichTextBox sin egen "RightMargin"-
+  egenskap (som faktisk styrer brytepunktet) settes ALDRI automatisk til
+  kontrollens bredde - na satt eksplisitt (og pa nytt ved hvert resize)
+- Fikset "Estimert tid igjen": estimatet leste alltid testens ORIGINALE
+  varighet fra config.ini, og ignorerte en egendefinert varighet valgt i
+  "Avansert..."-dialogen (f.eks. endring fra 5 til 1 minutt). Estimatet
+  bruker na samme overstyring som selve testkjoringen
+- "Siste CoreCycler-logg" er flyttet til en egen, fast venstre kolonne som
+  bruker hele vinduets hoyde - lost det gjentatte problemet med at loggen ble
+  klemt/usynlig nederst i vinduet pa mindre skjermer. Status, Handlinger,
+  Modus, Automatisk gjenoppretting og Fremdrift er samlet i en smalere,
+  rullbar kolonne til hoyre for loggen. Vinduets bredde er hevet fra 1260 til
+  1280 (fortsatt last, fortsatt smalt nok for en 1280-bredde/720p-skjerm)
 
 Nyheter i v0.8.7.11
 -------------------

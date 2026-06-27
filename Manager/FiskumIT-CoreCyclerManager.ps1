@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.11'
+$ManagerVersion = '0.8.7.12'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -393,6 +393,17 @@ function Show-OppdateringTilgjengeligDialog {
     $txt.ScrollBars = 'Vertical'
     $txt.Font = New-Object System.Drawing.Font('Consolas',9.5)
     $txt.Text = $endringslogg
+
+    # Fiskum IT (v0.8.7.12): WordWrap=$true er IKKE tilstrekkelig alene - RichTextBox sin
+    # egen "RightMargin"-egenskap (default 0, tolkes IKKE automatisk som "kontrollens egen
+    # bredde") styrer hvor teksten faktisk brytes, og oppdateres ALDRI automatisk ved
+    # opprettelse eller resize. Uten dette forsvinner teksten ut til hoyre i stedet for a
+    # brytes (bekreftet empirisk - se skjermbilder fra bruker, reprodusert isolert).
+    # Settes pa nytt ved hvert resize siden RightMargin er en FAST pikselverdi, ikke
+    # relativ/automatisk
+    $txt.RightMargin = $txt.ClientSize.Width
+    $txt.Add_Resize({ $this.RightMargin = $this.ClientSize.Width })
+
     $dlg.Controls.Add($txt)
 
     $btnOppdaterNa = New-Button -Text 'Oppdater nå' -X 12 -Y 424 -W 160 -H 36
@@ -2141,10 +2152,24 @@ function Get-EstimertTestVarighetSekunder {
     # Returnerer $null hvis verdien ikke kan beregnes (i stedet for a gjette) - kalleren
     # hopper da over denne testen i totalsummen, sa estimatet forblir aerlig "ca."
     param(
-        [Parameter(Mandatory)] [string]$ConfigPath
+        [Parameter(Mandatory)] [string]$ConfigPath,
+
+        # Fiskum IT (v0.8.7.12): overstyrer KUN selve runtimePerCore-verdien (samme
+        # semantikk som Activate-TestConfig sin Avansert-valg-patching) - "auto"-grenen
+        # under leser fortsatt yCruncher sine tests/testDuration FRA FILEN uendret, siden
+        # Avansert-dialogen aldri overstyrer disse. Brukes av
+        # Get-EstimertTestVarighetForPlanEntry for at "Estimert tid igjen" skal stemme med
+        # en faktisk valgt varighet i Avansert-dialogen, i stedet for alltid a lese testens
+        # ORIGINALE config.ini-verdi
+        [string]$RuntimePerCoreOverride
     )
 
-    $runtimeRaw = Get-ConfigLineValue -Path $ConfigPath -Section 'General' -Key 'runtimePerCore'
+    $runtimeRaw = if (-not [string]::IsNullOrWhiteSpace($RuntimePerCoreOverride)) {
+        $RuntimePerCoreOverride
+    }
+    else {
+        Get-ConfigLineValue -Path $ConfigPath -Section 'General' -Key 'runtimePerCore'
+    }
 
     if ([string]::IsNullOrWhiteSpace($runtimeRaw)) {
         return $null
@@ -2251,7 +2276,20 @@ function Get-EstimertTestVarighetForPlanEntry {
         return $null
     }
 
-    $perKjerneSekunder = Get-EstimertTestVarighetSekunder -ConfigPath $configPath
+    # Fiskum IT (v0.8.7.12): speiler PRESIS samme overstyrings-presedens som
+    # Activate-TestConfig (se den Vanlig-stabilitetstest-greinen der) - uten dette leste
+    # estimatet ALLTID testens ORIGINALE config.ini-verdi, selv om brukeren hadde valgt en
+    # helt annen varighet i "Avansert..."-dialogen (bekreftet bug: endring til "1" i
+    # Avansert pavirket aldri "Estimert tid igjen")
+    $runtimeOverride = $null
+    $avansert = @(Get-AvansertValg)
+    $entry = $avansert | Where-Object { [int]$_.id -eq [int]$Test.id } | Select-Object -First 1
+
+    if ($entry -and -not [string]::IsNullOrWhiteSpace([string]$entry.varighet)) {
+        $runtimeOverride = Get-RuntimePerCoreOverrideString -Varighet $entry.varighet
+    }
+
+    $perKjerneSekunder = Get-EstimertTestVarighetSekunder -ConfigPath $configPath -RuntimePerCoreOverride $runtimeOverride
 
     if ($null -eq $perKjerneSekunder) {
         return $null
@@ -5047,6 +5085,15 @@ function Show-BrukerveiledningDialog {
         $txt.Font = New-Object System.Drawing.Font('Segoe UI',9.5)
         $txt.Text = $fane.Value
 
+        # Fiskum IT (v0.8.7.12): v0.8.7.3-fiksen over var IKKE tilstrekkelig alene -
+        # RichTextBox sin "RightMargin"-egenskap (default 0) styrer hvor teksten faktisk
+        # brytes, og oppdateres ALDRI automatisk ved opprettelse eller resize, uavhengig av
+        # WordWrap/ScrollBars. Uten dette forsvinner teksten ut til hoyre i stedet for a
+        # brytes (bekreftet med skjermbilder fra bruker, reprodusert isolert). Settes pa
+        # nytt ved hvert resize siden RightMargin er en FAST pikselverdi
+        $txt.RightMargin = $txt.ClientSize.Width
+        $txt.Add_Resize({ $this.RightMargin = $this.ClientSize.Width })
+
         $page.Controls.Add($txt)
         $tabs.Controls.Add($page)
     }
@@ -5232,74 +5279,52 @@ function Show-AvansertDialog {
 }
 
 function Update-MainPanelLayout {
-    # Fiskum IT (v0.8.7.8): eksplisitt, deterministisk utregning av "Siste CoreCycler-logg"
-    # ($groupLog) sin hoyde og $mainPanel sin AutoScrollMinSize - ERSTATTER det tidligere
-    # forsoket (v0.8.7) pa a la $groupLog sin EGEN Anchor=Bottom gjore jobben automatisk.
-    # Det forsoket viste seg IKKE a vaere palitelig i praksis (rapportert pa nytt pa en
-    # hoyere-opplosning-skjerm i v0.8.7.4, til og med ETTER v0.8.7-fiksen): et stort, mort
-    # felt kunne bli liggende nederst etter at vinduet ble apnet med en lagret, storre
-    # hoyde - og forsvant IKKE selv etter at vinduet ble krympet igjen, men la seg i stedet
-    # OVER resten av innholdet. Sannsynlig rotarsak: Anchor-marginer for et NESTET,
-    # AutoScroll-aktivert panel sin egen barn ($groupLog inni $mainPanel) avhenger av NAR i
-    # oppbyggingen selve anchoringen forst trer i kraft (kan fanges med feil margin hvis
-    # det skjer for $mainPanel selv har blitt strukket til sin endelige storrelse) - i
-    # tillegg til at WinForms generelt ikke alltid tvinger gjennom et fullstendig
-    # repaint/re-layout naar en AutoScrollMinSize blir SATT LAVERE enn forrige verdi.
+    # Fiskum IT (v0.8.7.8): eksplisitt, deterministisk utregning av $mainPanel (hoyre,
+    # rullbar kolonne) sin hoyde - Anchor=Bottom alene er IKKE palitelig her, siden
+    # AutoScroll=$true forstyrrer normal Anchor-hoyde-resizing langs selve scroll-aksen
+    # (bekreftet ved diagnostikk under utvikling - et stort, mort felt kunne bli liggende
+    # nederst/ovenfor resten av innholdet). Setter derfor hoyden EKSPLISITT her i stedet,
+    # helt uavhengig av Anchor. Kalles bade ved hvert resize OG en gang rett etter oppstart
+    # (se kallet etter Build-Ui)
     #
-    # Regner na i stedet $groupLog sin hoyde direkte ut fra $mainPanel sin FAKTISKE,
-    # synlige klientstorrelse (IKKE avhengig av Anchor for selve hoyden - $groupLog er na
-    # kun Top/Left/Right-forankret, se Build-Ui), og tvinger en fullstendig
-    # re-layout+repaint hver gang. Kalles bade ved hvert resize OG en gang rett etter
-    # oppstart (se kallet etter Build-Ui)
-    if (-not ($App.Ui.mainPanel -and $App.Ui.groupLog)) {
+    # Fiskum IT (v0.8.7.12): "Siste CoreCycler-logg" ($groupLog) er na en HELT EGEN,
+    # uavhengig venstrekolonne parentert direkte pa $form (IKKE inni $mainPanel lenger) -
+    # dens hoyde regnes na ut PA SAMME MATE (direkte fra $form sin klienthoyde), men helt
+    # uavhengig av $mainPanel sin egen, FASTE interne stabelhoyde (se AutoScrollMinSize satt
+    # EN gang i Build-Ui na, siden den ikke lenger avhenger av $groupLog)
+    if (-not ($App.Ui.mainPanel -and $App.Ui.groupLog -and $App.Ui.Form)) {
         return
     }
 
-    # Fiskum IT (v0.8.7.8): tving en layout-omberegning av FORELDREN forst - $mainPanel sin
-    # egen Anchor-strekking relativt til $form kan ikke stoles pa a allerede ha kjort hvis
-    # dette kalles tidlig (f.eks. rett etter Build-Ui, FOR vinduet faktisk er vist) - uten
-    # dette kan $mainPanel.ClientSize fortsatt vaere den opprinnelige, smA design-tids-
-    # storrelsen, noe som ga akkurat samme "for lav hoyde"-symptom som selve Anchor-fiksen
-    # denne funksjonen skulle erstatte
     $mainPanel = $App.Ui.mainPanel
     $groupLog  = $App.Ui.groupLog
-
-    # Fiskum IT (v0.8.7.8): bekreftet ved diagnostikk under utvikling - $mainPanel sin EGEN
-    # Anchor=Bottom (relativt til $form) strekker IKKE hoyden, selv etter PerformLayout() og
-    # selv etter at vinduet faktisk er vist (Add_Shown). Bredden strekker korrekt (Anchor=
-    # Right virker fint), men hoyden sitter fast pa design-tids-verdien - et kjent
-    # WinForms-samspill der AutoScroll=$true forstyrrer normal Anchor-hoyde-resizing langs
-    # selve scroll-aksen. Setter derfor $mainPanel sin hoyde EKSPLISITT her ogsa (IKKE bare
-    # for $groupLog inni den), helt uavhengig av Anchor
-    if ($App.Ui.Form) {
-        $formHoyde = $App.Ui.Form.ClientSize.Height
-        $mainPanel.Size = New-Object System.Drawing.Size($mainPanel.Width, [Math]::Max(200, $formHoyde - $mainPanel.Top))
-    }
-
-    $minHoyde   = 150
+    $formHoyde = $App.Ui.Form.ClientSize.Height
     $bunnMargin = 16
-    $nyHoyde    = [Math]::Max($minHoyde, $mainPanel.ClientSize.Height - $groupLog.Top - $bunnMargin)
+    $minHoyde   = 150
 
-    $groupLog.Size = New-Object System.Drawing.Size($groupLog.Width, $nyHoyde)
-    $mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($groupLog.Bottom + $bunnMargin))
+    $mainPanel.Size = New-Object System.Drawing.Size($mainPanel.Width, [Math]::Max($minHoyde, $formHoyde - $mainPanel.Top - $bunnMargin))
+    $groupLog.Size  = New-Object System.Drawing.Size($groupLog.Width, [Math]::Max($minHoyde, $formHoyde - $groupLog.Top - $bunnMargin))
 
     $mainPanel.PerformLayout()
     $mainPanel.Invalidate($true)
+    $groupLog.PerformLayout()
+    $groupLog.Invalidate($true)
 }
 
 function Build-Ui {
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Fiskum IT CoreCycler Manager v$ManagerVersion"
     $form.StartPosition = 'CenterScreen'
-    # Fiskum IT (v0.8.2): vinduet ble for hoyt til a passe godt pa en 1080p-skjerm (spesielt
-    # med oppgavelinjen). Bredden er IKKE problemet (1260 er allerede smalt nok for bade
-    # 1920- og 1280-bredde skjermer) - kun hoyden last ned/frigjort. Alt fra $groupModus og
-    # nedover sitter na i en rullbar $mainPanel (se under), sa standardhoyden under er et
+    # Fiskum IT (v0.8.7.12): bredden hevet fra 1260 til 1280 for a gi "Siste CoreCycler-
+    # logg" en egen, fast venstre-kolonne (se under) uten a maatte krympe resten av
+    # innholdet - 1280 er fortsatt smalt nok for en 1280-bredde (720p) skjerm. ALT av
+    # innhold (Status, Handlinger, Modus, Automatisk gjenoppretting, Fremdrift) sitter na i
+    # en rullbar $mainPanel i en smalere HOYRE kolonne, sa standardhoyden under er et
     # KOMFORT-mal, ikke en hard grense - et mindre vindu (ned til MinimumSize) scroller i
     # stedet for a klippe noe. Bredden er fortsatt last (Min- og MaximumSize.Width like)
-    $form.Size = New-Object System.Drawing.Size(1260,900)
-    $form.MinimumSize = New-Object System.Drawing.Size(1260,540)
-    $form.MaximumSize = New-Object System.Drawing.Size(1260,3000)
+    $form.Size = New-Object System.Drawing.Size(1280,900)
+    $form.MinimumSize = New-Object System.Drawing.Size(1280,540)
+    $form.MaximumSize = New-Object System.Drawing.Size(1280,3000)
 
     # Fiskum IT (v0.8.2): gjenopprett lagret vindusstorrelse/-posisjon fra forrige lukking
     # (se Add_FormClosing under) - 0 betyr "ikke lagret ennaa", bruk standardverdiene over.
@@ -5329,7 +5354,7 @@ function Build-Ui {
 
     $header = New-Object System.Windows.Forms.Panel
     $header.Location = New-Object System.Drawing.Point(0,0)
-    $header.Size = New-Object System.Drawing.Size(1260,96)
+    $header.Size = New-Object System.Drawing.Size(1280,96)
     $header.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
     $form.Controls.Add($header)
 
@@ -5365,48 +5390,57 @@ function Build-Ui {
     # tidligere var HARDKODET og dermed glemt oppdatert flere ganger - se $ManagerVersion)
     # og inn i en egen, liten, nedtonet label i ovre hoyre hjorne - fortsatt synlig, men
     # ikke konkurrerende med selve produktnavnet om oppmerksomheten
-    $lblVersion = New-Label -Text "v$ManagerVersion" -X 1140 -Y 10 -W 104 -H 18
+    $lblVersion = New-Label -Text "v$ManagerVersion" -X 1160 -Y 10 -W 104 -H 18
     $lblVersion.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
     $lblVersion.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(110,114,120)
     $lblVersion.Font = New-Object System.Drawing.Font('Segoe UI',8)
     $header.Controls.Add($lblVersion)
 
-    $groupStatus = New-Object System.Windows.Forms.GroupBox
-    $groupStatus.Text = 'Status'
-    $groupStatus.Location = New-Object System.Drawing.Point(16,100)
-    $groupStatus.Size = New-Object System.Drawing.Size(610,260)
-    $groupStatus.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
-    $groupStatus.BackColor = $panelBackColor
-    $groupStatus.ForeColor = $panelForeColor
-    $form.Controls.Add($groupStatus)
+    # Fiskum IT (v0.8.7.12): vinduet er na delt i to faste kolonner under headeren -
+    # "Siste CoreCycler-logg" ($groupLog, se langt under) i en egen, FAST venstre kolonne
+    # som bruker hele vinduets hoyde (lost det gjentatte "loggen forsvinner/klippes nederst
+    # pa mindre skjermer"-problemet en gang for alle, siden den ikke lenger konkurrerer om
+    # plass med noe annet), og ALT annet innhold (Status, Handlinger, Modus, Automatisk
+    # gjenoppretting, Fremdrift) stablet i en smalere, rullbar $mainPanel til hoyre for den.
+    # Status/Handlinger la TIDLIGERE (v0.8.2-v0.8.7.11) i en egen, ikke-rullbar topp-sone -
+    # det er na bevisst forlatt (brukerens eget valg) for at hele resten av innholdet skal
+    # fa plass i den smalere hoyre kolonnen uten at noen av de andre boksene (Modus etc.)
+    # ma bli enda smalere
+    $kolonneVenstreX  = 16
+    $kolonneVenstreW  = 592
+    $kolonneHoyreX    = $kolonneVenstreX + $kolonneVenstreW + 16
+    $kolonneHoyreW    = 640
+    $kolonneToppY     = 104
 
-    $groupActions = New-Object System.Windows.Forms.GroupBox
-    $groupActions.Text = 'Handlinger'
-    $groupActions.Location = New-Object System.Drawing.Point(640,100)
-    $groupActions.Size = New-Object System.Drawing.Size(590,260)
-    $groupActions.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
-    $groupActions.BackColor = $panelBackColor
-    $groupActions.ForeColor = $panelForeColor
-    $form.Controls.Add($groupActions)
-
-    # Fiskum IT (v0.8.2): fast topp-sone (header + Status/Handlinger) er ALLTID synlig -
-    # de "her og na"-feltene (status, aktiv test, PID, kjerne, offset) og Start/Stopp-
-    # knappene skal aldri kunne scrolles bort. Alt under (Modus/Automatisk gjenoppretting/
-    # Fremdrift/Siste logg) sitter i denne rullbare panelen i stedet - samme etablerte
-    # AutoScroll-monster som allerede brukes i Show-AvansertDialog. Anchor=Top,Bottom,Left,
-    # Right gjor at panelen automatisk fyller resten av klientarealet nar vinduet endrer
-    # storrelse, uten en egen Resize-handler
     $mainPanel = New-Object System.Windows.Forms.Panel
-    $mainPanel.Location = New-Object System.Drawing.Point(0,364)
-    $mainPanel.Size = New-Object System.Drawing.Size(1260,536)
+    $mainPanel.Location = New-Object System.Drawing.Point($kolonneHoyreX, $kolonneToppY)
+    $mainPanel.Size = New-Object System.Drawing.Size($kolonneHoyreW,700)
     # Fiskum IT (v0.8.7.8): IKKE Anchor=Bottom her - bekreftet ved diagnostikk at dette IKKE
     # strekker hoyden palitelig nar AutoScroll=$true (se Update-MainPanelLayout, som na
-    # setter hoyden eksplisitt i stedet, bade for denne og for $groupLog inni den)
-    $mainPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    # setter hoyden eksplisitt i stedet)
+    $mainPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
     $mainPanel.AutoScroll = $true
     $mainPanel.BackColor = [System.Drawing.Color]::FromArgb(15,17,22)
     $form.Controls.Add($mainPanel)
+
+    $groupStatus = New-Object System.Windows.Forms.GroupBox
+    $groupStatus.Text = 'Status'
+    $groupStatus.Location = New-Object System.Drawing.Point(16,8)
+    $groupStatus.Size = New-Object System.Drawing.Size(596,260)
+    $groupStatus.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
+    $groupStatus.BackColor = $panelBackColor
+    $groupStatus.ForeColor = $panelForeColor
+    $mainPanel.Controls.Add($groupStatus)
+
+    $groupActions = New-Object System.Windows.Forms.GroupBox
+    $groupActions.Text = 'Handlinger'
+    $groupActions.Location = New-Object System.Drawing.Point(16,278)
+    $groupActions.Size = New-Object System.Drawing.Size(596,260)
+    $groupActions.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
+    $groupActions.BackColor = $panelBackColor
+    $groupActions.ForeColor = $panelForeColor
+    $mainPanel.Controls.Add($groupActions)
 
     $lblStatus = New-Label -Text 'Status:' -X 18 -Y 28 -W 130 -H 22 -Bold $true
     $lblStatusValue = New-Label -Text '-' -X 170 -Y 28 -W 420 -H 22 -Bold $true
@@ -5492,9 +5526,13 @@ function Build-Ui {
 
     $groupModus = New-Object System.Windows.Forms.GroupBox
     $groupModus.Text = 'Modus'
-    # Fiskum IT (v0.8.2): Y er na relativ til $mainPanel (rullbar), ikke $form direkte
-    $groupModus.Location = New-Object System.Drawing.Point(16,8)
-    $groupModus.Size = New-Object System.Drawing.Size(1214,172)
+    # Fiskum IT (v0.8.2): Y er na relativ til $mainPanel (rullbar), ikke $form direkte.
+    # Fiskum IT (v0.8.7.12): flyttet ned under Status+Handlinger (na ogsa i $mainPanel, se
+    # over) og smalnet inn fra 1214 til 596 - se reflyt av $chkAutoSwitch/$lblModusHint/
+    # $lblUndervoltStotte under (stablet i stedet for side-ved-side med radioknappene, og
+    # hoyere boks for a fa plass til flere tekstbrytingslinjer i den smalere bredden)
+    $groupModus.Location = New-Object System.Drawing.Point(16,548)
+    $groupModus.Size = New-Object System.Drawing.Size(596,330)
     $groupModus.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupModus.BackColor = $panelBackColor
     $groupModus.ForeColor = $panelForeColor
@@ -5508,7 +5546,7 @@ function Build-Ui {
     $radioAssistert = New-Object System.Windows.Forms.RadioButton
     $radioAssistert.Text = 'Aggressivt undervolt-søk (finn grensen per kjerne)'
     $radioAssistert.Location = New-Object System.Drawing.Point(18,26)
-    $radioAssistert.Size = New-Object System.Drawing.Size(440,24)
+    $radioAssistert.Size = New-Object System.Drawing.Size(560,24)
     $radioAssistert.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $radioAssistert.FlatStyle = 'Flat'
 
@@ -5528,7 +5566,7 @@ function Build-Ui {
     $radioStabilitet = New-Object System.Windows.Forms.RadioButton
     $radioStabilitet.Text = 'Stabilitetstest (auto-juster ved feil)'
     $radioStabilitet.Location = New-Object System.Drawing.Point(18,54)
-    $radioStabilitet.Size = New-Object System.Drawing.Size(440,24)
+    $radioStabilitet.Size = New-Object System.Drawing.Size(560,24)
     $radioStabilitet.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $radioStabilitet.Checked = $true
     $radioStabilitet.ForeColor = $panelForeColor
@@ -5540,24 +5578,26 @@ function Build-Ui {
     # (CheckBox.Enabled=$false tvinger gjennom en for mork, darlig lesbar tekstfarge fra
     # Windows uavhengig av FlatStyle/ForeColor). "Ikke relevant na" vises i stedet med en
     # dimmet ForeColor, satt av Update-AssistertUiEnabled like etter UI'et er bygget
+    # Fiskum IT (v0.8.7.12): flyttet fra "ved siden av" radioknappene (X=490) til "under"
+    # btnAvansert - se ny, smalere $groupModus-bredde (596, var 1214) over
     $chkAutoSwitch = New-Object System.Windows.Forms.CheckBox
     $chkAutoSwitch.Text = 'Gå automatisk videre til Stabilitetstest (auto-juster ved feil) når Aggressivt undervolt-søk er fullført'
-    $chkAutoSwitch.Location = New-Object System.Drawing.Point(490,24)
-    $chkAutoSwitch.Size = New-Object System.Drawing.Size(700,48)
+    $chkAutoSwitch.Location = New-Object System.Drawing.Point(18,124)
+    $chkAutoSwitch.Size = New-Object System.Drawing.Size(560,64)
     $chkAutoSwitch.Font = New-Object System.Drawing.Font('Segoe UI',9)
     $chkAutoSwitch.Checked = $true
     $chkAutoSwitch.Enabled = $true
     $chkAutoSwitch.ForeColor = $panelForeColor
     $chkAutoSwitch.FlatStyle = 'Flat'
 
-    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Stabilitetstest (auto-juster ved feil).' -X 490 -Y 76 -W 700 -H 22
+    $lblModusHint = New-Label -Text '"Avansert..." (valg av tester/varighet) gjelder kun Stabilitetstest (auto-juster ved feil).' -X 18 -Y 192 -W 560 -H 36
 
     # Fiskum IT: marker hvilken CPU som er oppdaget og hvorfor Assistert undervolting
     # er (eller ikke er) tilgjengelig - se Get-UndervoltStotteInfo
-    # H=40 (i stedet for enlinjes 22): KortStatus-teksten kan variere i lengde avhengig av
-    # CPU-modell/generasjon - lar etiketten brette til 2 linjer i stedet for a klippes/overlappe
+    # H=80 (v0.8.7.12, var 40): smalere bredde (560, var 1170) gir flere tekstbrytingslinjer
+    # for KortStatus-teksten - lar etiketten brette i stedet for a klippes/overlappe
     # GroupBox-en under (WinForms Label bretter automatisk nar AutoSize=false, som er default)
-    $lblUndervoltStotte = New-Label -Text ('CPU oppdaget: {0} - {1}' -f $undervoltStotte.CpuNavn, $undervoltStotte.KortStatus) -X 18 -Y 122 -W 1170 -H 40
+    $lblUndervoltStotte = New-Label -Text ('CPU oppdaget: {0} - {1}' -f $undervoltStotte.CpuNavn, $undervoltStotte.KortStatus) -X 18 -Y 232 -W 560 -H 80
     $lblUndervoltStotte.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupModus.Controls.AddRange(@(
@@ -5570,11 +5610,13 @@ function Build-Ui {
     ))
 
     # Fiskum IT (v0.8.2): ny GroupBox satt inn MELLOM groupModus og groupProgress -
-    # groupModus var allerede full (6 kontroller), og alt under denne flyttes 150px ned
+    # groupModus var allerede full (6 kontroller), og alt under denne flyttes 150px ned.
+    # Fiskum IT (v0.8.7.12): smalnet inn fra 1214 til 596 - se reflyt av hint-labelene under
+    # (na flere tekstbrytingslinjer i stedet for en lang enkel linje)
     $groupGjenoppretting = New-Object System.Windows.Forms.GroupBox
     $groupGjenoppretting.Text = 'Automatisk gjenoppretting'
-    $groupGjenoppretting.Location = New-Object System.Drawing.Point(16,188)
-    $groupGjenoppretting.Size = New-Object System.Drawing.Size(1214,162)
+    $groupGjenoppretting.Location = New-Object System.Drawing.Point(16,888)
+    $groupGjenoppretting.Size = New-Object System.Drawing.Size(596,206)
     $groupGjenoppretting.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupGjenoppretting.BackColor = $panelBackColor
     $groupGjenoppretting.ForeColor = $panelForeColor
@@ -5588,10 +5630,10 @@ function Build-Ui {
     $btnGjenopprettingAktiver = New-Button -Text 'Aktiv' -X 18 -Y 24 -W 160
     $btnGjenopprettingDeaktiver = New-Button -Text 'Deaktivert' -X 188 -Y 24 -W 160
 
-    $lblRestartWaitMinutes = New-Label -Text 'Minutter å vente etter restart før gjenopptak:' -X 18 -Y 86 -W 320 -H 22
+    $lblRestartWaitMinutes = New-Label -Text 'Minutter å vente etter restart før gjenopptak:' -X 18 -Y 68 -W 320 -H 22
 
     $numRestartWaitMinutes = New-Object System.Windows.Forms.NumericUpDown
-    $numRestartWaitMinutes.Location = New-Object System.Drawing.Point(346,84)
+    $numRestartWaitMinutes.Location = New-Object System.Drawing.Point(346,66)
     $numRestartWaitMinutes.Size = New-Object System.Drawing.Size(70,24)
     $numRestartWaitMinutes.Minimum = 1
     $numRestartWaitMinutes.Maximum = 60
@@ -5604,10 +5646,10 @@ function Build-Ui {
     $numRestartWaitMinutes.BackColor = $panelBackColor
     $numRestartWaitMinutes.ForeColor = $panelForeColor
 
-    $lblGjenopprettingHint = New-Label -Text '"Aktiv" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 112 -W 1170 -H 22
+    $lblGjenopprettingHint = New-Label -Text '"Aktiv" setter opp autostart og auto-restart ved krasj/feil. Du blir da spurt om å bekrefte Windows-passordet ditt når du trykker "Start" (ikke når feilen faktisk oppstår) - kun hvis autologon ikke allerede er satt opp.' -X 18 -Y 98 -W 560 -H 44
     $lblGjenopprettingHint.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
-    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 134 -W 1170 -H 22
+    $lblGjenopprettingHint2 = New-Label -Text 'Har kontoen ingen passord? Da hoppes spørsmålet automatisk over. Husk ellers: det er PASSORDET (ikke PIN-koden/Windows Hello) som eventuelt skal fylles inn.' -X 18 -Y 146 -W 560 -H 44
     $lblGjenopprettingHint2.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupGjenoppretting.Controls.AddRange(@(
@@ -5621,10 +5663,12 @@ function Build-Ui {
 
     $groupProgress = New-Object System.Windows.Forms.GroupBox
     $groupProgress.Text = 'Fremdrift'
-    $groupProgress.Location = New-Object System.Drawing.Point(16,358)
+    # Fiskum IT (v0.8.7.12): flyttet ned under groupGjenoppretting (na ogsa smalnet inn til
+    # 596, var 1214) - se reflyt av $progress/$lblProgressValue/$lblTidValue under
+    $groupProgress.Location = New-Object System.Drawing.Point(16,1104)
     # Fiskum IT (v0.8.7.6): hevet fra 90 til 116 for a fa plass til den nye
     # tidsestimat-raden ($lblTidValue) under selve fremdriftsbaren
-    $groupProgress.Size = New-Object System.Drawing.Size(1214,116)
+    $groupProgress.Size = New-Object System.Drawing.Size(596,142)
     $groupProgress.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupProgress.BackColor = $panelBackColor
     $groupProgress.ForeColor = $panelForeColor
@@ -5635,19 +5679,23 @@ function Build-Ui {
     # mork, og selve baren er fortsatt godt synlig
     $progress = New-Object System.Windows.Forms.ProgressBar
     $progress.Location = New-Object System.Drawing.Point(18,32)
-    $progress.Size = New-Object System.Drawing.Size(980,24)
+    $progress.Size = New-Object System.Drawing.Size(560,24)
     $progress.Minimum = 0
     $progress.Maximum = 100
     $progress.Value = 0
     $progress.BackColor = $panelBackColor
     $progress.ForeColor = [System.Drawing.Color]::FromArgb(13,234,160)
 
-    $lblProgressValue = New-Label -Text '0/0 tester (0%)' -X 1010 -Y 34 -W 180 -H 22 -Bold $true
+    # Fiskum IT (v0.8.7.12): flyttet under fremdriftsbaren (var til hoyre for den, X=1010) -
+    # ikke nok bredde til a sta side-ved-side i den smalere groupProgress (596, var 1214)
+    $lblProgressValue = New-Label -Text '0/0 tester (0%)' -X 18 -Y 60 -W 300 -H 22 -Bold $true
 
     # Fiskum IT (v0.8.7.6): ca. kalkulert tidsbruk/tid igjen - se Get-FremdriftTidTekst.
     # Ikke fet skrift (mindre fremtredende enn selve fremdriften over) og en nedtonet
-    # farge, siden dette alltid er et "ca."-anslag, ikke en garanti
-    $lblTidValue = New-Label -Text '' -X 18 -Y 64 -W 1172 -H 22
+    # farge, siden dette alltid er et "ca."-anslag, ikke en garanti.
+    # Fiskum IT (v0.8.7.12): H hevet til 40 (var 22) - smalere bredde (560, var 1172) kan na
+    # bryte teksten til 2 linjer
+    $lblTidValue = New-Label -Text '' -X 18 -Y 86 -W 560 -H 40
     $lblTidValue.ForeColor = [System.Drawing.Color]::FromArgb(150,154,160)
 
     $groupProgress.Controls.AddRange(@(
@@ -5656,38 +5704,51 @@ function Build-Ui {
         $lblTidValue
     ))
 
+    # Fiskum IT (v0.8.7.12): $mainPanel sin interne stabel (Status->Handlinger->Modus->
+    # Automatisk gjenoppretting->Fremdrift) har na en FAST total hoyde, uavhengig av
+    # vinduets storrelse (alle boksene over har fast Y/H) - AutoScrollMinSize kan derfor
+    # settes EN gang her, i stedet for a regnes ut pa nytt ved hvert resize (se tidligere
+    # versjon av Update-MainPanelLayout, som matte gjore dette pga. $groupLog sin
+    # variable hoyde DA den fortsatt lag inni $mainPanel - $groupLog er na en helt egen,
+    # uavhengig kolonne, se under)
+    $mainPanel.AutoScrollMinSize = New-Object System.Drawing.Size(0, ($groupProgress.Bottom + 16))
+
     # Fiskum IT: dette er na hovedinnholdet i vinduet - CoreCycler-konsollen kjores skjult
     # (se Start-CoreCyclerStep), og denne RichTextBox-en viser i stedet et fargelagt,
     # filtrert ekvivalent av det konsollvinduet (sammen med "State og historikk", som
     # tidligere lå her som et eget panel - rent Manager-internt bokforing, fjernet fra
     # UI'et siden det ikke er interessant for vanlige brukere, men fortsatt fullt
     # tilgjengelig i Manager\logs\ - se Add-History)
+    #
+    # Fiskum IT (v0.8.7.12): "Siste CoreCycler-logg" er na en HELT EGEN, fast venstre
+    # kolonne parentert direkte pa $form (IKKE inni $mainPanel lenger) - bruker hele
+    # vinduets hoyde under headeren, i stedet for a vaere SISTE element i en vertikal
+    # stabel som kunne klippes/klemmes pa mindre skjermer (brukerens gjentatte
+    # tilbakemelding om dette - se ogsa $kolonneVenstreX/-W satt ved $mainPanel over).
+    # Hoyden settes eksplisitt i Update-MainPanelLayout (samme etablerte monster som
+    # $mainPanel selv - se v0.8.7.8-begrunnelsen der for hvorfor Anchor=Bottom alene ikke
+    # er palitelig nok å stole på i denne kodebasen)
     $groupLog = New-Object System.Windows.Forms.GroupBox
     $groupLog.Text = 'Siste CoreCycler-logg'
-    # Fiskum IT (v0.8.7.6): flyttet ned 26px (456 -> 482), matcher groupProgress sin nye
-    # hoyde (90 -> 116) over
-    $groupLog.Location = New-Object System.Drawing.Point(16,482)
-    # Fiskum IT (v0.8.2): redusert fra 380 - na i en rullbar panel, sa dette er kun et
-    # komfort-mal for standardvisningen, ikke en hard grense
-    $groupLog.Size = New-Object System.Drawing.Size(1214,260)
-    # Fiskum IT (v0.8.7.8): IKKE lenger Anchor=Bottom her - se Update-MainPanelLayout for
-    # begrunnelsen (Anchor-basert hoyde-stretching av en NESTET, AutoScroll-aktivert
-    # forelder viste seg upalitelig i praksis - "Siste CoreCycler-logg" sin hoyde regnes na
-    # i stedet ut eksplisitt der, basert pa $mainPanel sin faktiske klientstorrelse)
-    $groupLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    $groupLog.Location = New-Object System.Drawing.Point($kolonneVenstreX, $kolonneToppY)
+    $groupLog.Size = New-Object System.Drawing.Size($kolonneVenstreW,700)
+    $groupLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
     $groupLog.Font = New-Object System.Drawing.Font('Segoe UI',9,[System.Drawing.FontStyle]::Bold)
     $groupLog.BackColor = $panelBackColor
     $groupLog.ForeColor = $panelForeColor
-    $mainPanel.Controls.Add($groupLog)
+    $form.Controls.Add($groupLog)
 
     $lblLastLog = New-Label -Text 'Loggfil:' -X 16 -Y 26 -W 90 -H 22 -Bold $true
-    $lblLastLogValue = New-Label -Text '-' -X 110 -Y 26 -W 1080 -H 22
+    $lblLastLogValue = New-Label -Text '-' -X 110 -Y 26 -W ($kolonneVenstreW - 110 - 16) -H 22
 
     $txtLog = New-Object System.Windows.Forms.RichTextBox
     $txtLog.Location = New-Object System.Drawing.Point(16,52)
-    # Fiskum IT (v0.8.2): redusert fra 300 til 180 - matcher $groupLog sin nye, lavere
-    # standardhoyde (260, var 380). Vinduet/panelen er na rullbar uansett
-    $txtLog.Size = New-Object System.Drawing.Size(1178,180)
+    # Fiskum IT (v0.8.7.12): $groupLog er na en uavhengig, full-hoyde venstrekolonne (se
+    # over) - Anchor=Bottom her er trygt FORDI $groupLog sin EGEN forelder ($form) ikke er
+    # AutoScroll-aktivert (den kjente kvirken fra v0.8.7.8 gjaldt spesifikt nestede
+    # AutoScroll-paneler, ikke en vanlig GroupBox->Form-relasjon). Bredden matcher
+    # $kolonneVenstreW (592, satt ved $mainPanel over) minus venstre+hoyre marg
+    $txtLog.Size = New-Object System.Drawing.Size(($kolonneVenstreW - 32),600)
     $txtLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $txtLog.BackColor = [System.Drawing.Color]::Black
     $txtLog.ReadOnly = $true
