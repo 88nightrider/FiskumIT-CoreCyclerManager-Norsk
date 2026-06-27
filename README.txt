@@ -1,5 +1,16 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.15
+﻿Fiskum IT CoreCycler Manager v0.8.7.16
 ============================================================
+
+Nyheter i v0.8.7.16
+-------------------
+- Fikset et morkt felt pa hoyre side ved oppstart, hvis vinduet sist ble
+  lukket i en BREDERE storrelse enn standard (1280) - og krymping av
+  vinduet hjalp IKKE mot dette. Rotarsak: kolonnebreddene/header sin bredde/
+  versjonsmerkingens posisjon ble alle regnet ut fra en HARDKODET 1280-
+  bredde, ikke vinduets faktiske, gjenopprettede bredde - nar disse ikke
+  stemte, "laste" Anchor seg fast pa feil referansemarginer allerede ved
+  oppstart, noe som ikke kunne rettes opp igjen ved bare a endre storrelse
+  pa nytt. Alle disse beregnes na fra vinduets faktiske bredde ved oppstart
 
 Nyheter i v0.8.7.15
 -------------------

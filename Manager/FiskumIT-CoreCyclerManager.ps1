@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.15'
+$ManagerVersion = '0.8.7.16'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -5363,7 +5363,11 @@ function Build-Ui {
 
     $header = New-Object System.Windows.Forms.Panel
     $header.Location = New-Object System.Drawing.Point(0,0)
-    $header.Size = New-Object System.Drawing.Size(1280,96)
+    # Fiskum IT (v0.8.7.16): bredden settes na fra $form sin FAKTISKE ClientSize.Width (var
+    # hardkodet 1280) - samme rotarsak/fiks som $kolonneVenstreW under: en hardkodet bredde
+    # kombinert med Anchor=Right fanger en FEIL referansemargin hvis vinduet apnes med en
+    # lagret, annerledes bredde enn 1280
+    $header.Size = New-Object System.Drawing.Size($form.ClientSize.Width,96)
     # Fiskum IT (v0.8.7.15): Anchor=Right lagt til - uten denne strakk IKKE $header seg selv
     # i bredde nar vinduet ble utvidet (bredden er ikke lenger last, se $form.MaximumSize.
     # Width), sa $lblVersion/$btnExit (anchoret Top,Right MOT $header, ikke mot $form) ble
@@ -5405,7 +5409,12 @@ function Build-Ui {
     # tidligere var HARDKODET og dermed glemt oppdatert flere ganger - se $ManagerVersion)
     # og inn i en egen, liten, nedtonet label i ovre hoyre hjorne - fortsatt synlig, men
     # ikke konkurrerende med selve produktnavnet om oppmerksomheten
-    $lblVersion = New-Label -Text "v$ManagerVersion" -X 1160 -Y 10 -W 104 -H 18
+    # Fiskum IT (v0.8.7.16): X regnes na ut fra $form sin FAKTISKE ClientSize.Width (var
+    # hardkodet 1160, kun korrekt for en 1280-bred vindu) - samme rotarsak/fiks som
+    # $kolonneVenstreW/$header.Size over: en hardkodet X kombinert med Anchor=Right fanger en
+    # FEIL referansemargin hvis vinduet apnes med en lagret, annerledes bredde enn 1280
+    $hjorneX = $form.ClientSize.Width - 104 - 16
+    $lblVersion = New-Label -Text "v$ManagerVersion" -X $hjorneX -Y 10 -W 104 -H 18
     $lblVersion.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
     $lblVersion.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblVersion.ForeColor = [System.Drawing.Color]::FromArgb(110,114,120)
@@ -5415,7 +5424,7 @@ function Build-Ui {
     # Fiskum IT (v0.8.7.13): flyttet fra "Handlinger" til ovre hoyre hjorne, rett under
     # versjonsmerkingen (brukerens tilbakemelding) - na alltid synlig uten a matte rulle ned
     # i hoyre kolonne, og samme bredde/X som $lblVersion over den
-    $btnExit = New-Button -Text 'Avslutt' -X 1160 -Y 32 -W 104 -H 30
+    $btnExit = New-Button -Text 'Avslutt' -X $hjorneX -Y 32 -W 104 -H 30
     $btnExit.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
     $header.Controls.Add($btnExit)
 
@@ -5438,10 +5447,23 @@ function Build-Ui {
     # - all ekstra bredde gar dit, IKKE til hoyre kolonne. $mainPanel bruker derfor
     # Anchor=Top,Right (IKKE Left) na - holder FAST bredde og fast avstand til hoyre
     # vinduskant, og flytter seg automatisk til hoyre nar vinduet utvides
+    #
+    # Fiskum IT (v0.8.7.16): $kolonneVenstreW regnes na ut fra $form sin FAKTISKE bredde PA
+    # DETTE TIDSPUNKTET (etter den lagrede vindusstorrelsen lenger oppe er gjenopprettet),
+    # IKKE en hardkodet konstant (var 500, kun korrekt nar vinduet faktisk var 1280 bredt).
+    # BUG (bekreftet med skjermbilder fra bruker): apnet vinduet med en LAGRET, BREDERE
+    # storrelse (f.eks. 1730 etter en tidligere manuell utvidelse) - $groupLog/$mainPanel ble
+    # da plassert/storrelsessatt som om vinduet fortsatt var 1280 bredt, og Anchor "laste inn"
+    # det DA-feilaktige gapet til hoyre kant som sin nye, faste referansemargin for alltid
+    # fremover - synlig som et mort felt til hoyre (umulig a fjerne ved a bare krympe
+    # vinduet igjen, siden selve referansemarginen var feil, ikke selve storrelsen). $mainPanel
+    # sin bredde (732, $kolonneHoyreW) er fortsatt fast - all variabel bredde havner i
+    # venstre kolonne, akkurat som tiltenkt, men na uavhengig av hvilken bredde vinduet
+    # faktisk apnes med
     $kolonneVenstreX  = 16
-    $kolonneVenstreW  = 500
-    $kolonneHoyreX    = $kolonneVenstreX + $kolonneVenstreW + 16
     $kolonneHoyreW    = 732
+    $kolonneVenstreW  = [Math]::Max(300, $form.ClientSize.Width - $kolonneHoyreW - $kolonneVenstreX - 16 - 16)
+    $kolonneHoyreX    = $kolonneVenstreX + $kolonneVenstreW + 16
     $kolonneToppY     = 104
 
     $mainPanel = New-Object System.Windows.Forms.Panel
