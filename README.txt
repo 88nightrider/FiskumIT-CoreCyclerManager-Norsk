@@ -1,5 +1,17 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.13
+﻿Fiskum IT CoreCycler Manager v0.8.7.14
 ============================================================
+
+Nyheter i v0.8.7.14
+-------------------
+- "Fremdrift" flyttet til toppen av venstre kolonne, over "Siste CoreCycler-
+  logg" - begge bruker na sammen hele vinduets hoyde under headeren
+- Hoyden pa Status/Handlinger/Modus/Automatisk gjenoppretting komprimert
+  videre (mindre apent rom, BREDDEN er uendret)
+- Standard apningsstorrelse satt til 1280x700 - passer komfortabelt pa en
+  720p-skjerm (var 1280x900, matte krympes manuelt der)
+- Vinduets bredde er IKKE lenger last - kan na utvides, og all ekstra bredde
+  gar til venstre kolonne (Fremdrift+logg blir bredere). Hoyre kolonne
+  (Status/Handlinger/Modus/Automatisk gjenoppretting) holder fast bredde
 
 Nyheter i v0.8.7.13
 -------------------

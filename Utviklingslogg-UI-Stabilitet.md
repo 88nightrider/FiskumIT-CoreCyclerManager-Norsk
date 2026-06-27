@@ -329,3 +329,37 @@ ekte skjermdump ved både standard (900px) og minimum (540px) vindushøyde -
 ingen klipping, ingen uventet horisontal scrollbar (en reell, observert
 bivirkning av for trange `GroupBox`-bredder relativt til `$mainPanel` sin
 vertikale scrollbar-bredde - måtte justeres med ca. 12px ekstra margin).
+
+**Videre justering (v0.8.7.14)**: brukeren ba om å komprimere høyre kolonne
+i HØYDEN (ikke bredden), flytte "Fremdrift" til toppen av venstre kolonne
+(over loggen), sette en 720p-vennlig standardstørrelse, og gjøre vinduets
+BREDDE utvidbar - med all ekstra bredde gående til venstre kolonne, ikke til
+høyre. Endringer:
+- Status/Handlinger/Modus/Automatisk gjenoppretting komprimert videre i
+  høyden (tettere rad-/kontrollplassering) - bredden (688px) er UENDRET.
+- `$groupProgress` ("Fremdrift") flyttet ut av `$mainPanel`-stabelen og inn
+  i venstre kolonne, parentert direkte på `$form`, plassert OVER `$groupLog`
+  (`$groupLog.Top` er nå `$groupProgress.Bottom + 10`, ikke en fast verdi).
+- `$form.Size` standard endret til 1280x700 (var 1280x900) - passer
+  komfortabelt på en 720p-skjerm (1280x720) inkl. oppgavelinje/vindusramme.
+- `$form.MaximumSize.Width` hevet kraftig (var låst til 1280, lik
+  MinimumSize) - bredden kan nå utvides. `$mainPanel` byttet fra
+  `Anchor=Top,Left` til `Anchor=Top,Right` (holder FAST bredde, men flytter
+  seg automatisk til høyre når vinduet utvides), mens `$groupProgress`/
+  `$groupLog` fikk `Anchor=Top,Left,Right` lagt til (strekker seg i bredde).
+  Viktig presisering fra testingen: ren `Anchor=Right`-stretching av en
+  vanlig `GroupBox` (uten `AutoScroll`) er HELT vanlig, pålitelig WinForms-
+  oppførsel - IKKE samme kvirk som `$mainPanel` sin høyde (den gjaldt
+  spesifikt `AutoScroll` sin EGEN akse). `Update-MainPanelLayout` måtte
+  derfor IKKE endres for bredde-delen, kun kommentarene oppdatert.
+
+**Verifisert**: isolert layout-test ved tre scenarioer (ekte skjermdump,
+samme geometri som faktisk kode): (1) standard 1280×700 - "Fremdrift" øverst
+i venstre kolonne, loggen under, ingen klipping; (2) faktisk RESIZE fra
+1280×700 til 1700×700 (viktig: testet som en ekte etterfølgende
+størrelsesendring, IKKE en form opprettet direkte i full bredde - den første
+metoden ga et FEILAKTIG resultat der venstre kolonne ikke strakk seg, fordi
+WinForms sin `Anchor`-margin fanges ved FØRSTE layout, ikke ved opprettelse)
+- venstre kolonne strakk seg korrekt til å fylle all ny bredde, høyre kolonne
+forble fast og glir langs høyre kant; (3) minimum høyde 540px - begge
+kolonner krymper korrekt i høyden, ingen klipping.
