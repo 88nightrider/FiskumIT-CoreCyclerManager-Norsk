@@ -1,5 +1,12 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.16
+﻿Fiskum IT CoreCycler Manager v0.8.7.17
 ============================================================
+
+Nyheter i v0.8.7.17
+-------------------
+- Lagt til en kort merknad om OCCT i Hjelp-vinduet ("Avansert og Verktøy"-fanen): bundles
+  ikke med Manageren og kan ikke startes herfra ennå (et fremtidig, valgfritt tilleggstrinn
+  er under vurdering) - og at en lokal OCCT-mappe ikke automatisk følges av en lisensfil,
+  sjekk occt.app for gjeldende vilkår selv
 
 Nyheter i v0.8.7.16
 -------------------

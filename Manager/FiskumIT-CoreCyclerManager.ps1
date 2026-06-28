@@ -254,7 +254,7 @@ $StartBatPath     = Join-Path $ManagerDir 'Start-FiskumIT-CoreCyclerManager.bat'
 # Fiskum IT (v0.8.2): eneste sted versjonsnummeret defineres - brukes i tittellinjen,
 # oppstartsloggen, og av Collect-FiskumITDiagnostics sin Get-ArchiveVersion (regex mot
 # DENNE linjen). Bump denne ved hver nye release, og tagg samme commit i git (se README)
-$ManagerVersion = '0.8.7.16'
+$ManagerVersion = '0.8.7.17'
 # Fiskum IT (v0.8.2): "ejer/repo"-form (uten https://github.com/-prefiks) - brukt direkte
 # i GitHub REST API-URL-en av Test-NyVersjonTilgjengelig
 $GitHubRepo = '88nightrider/FiskumIT-CoreCyclerManager-Norsk'
@@ -5054,7 +5054,9 @@ function Show-BrukerveiledningDialog {
             "Samler mindre brukte handlinger: åpne siste logg, åpne skrivebordsrapport, nullstill state, åpne config-mappen, og deaktiver automatisk pålogging (autologon). Den røde knappen tvangsdeaktiverer autologon uavhengig av hvem som satte den opp - nyttig hvis en eldre versjon av Manageren (eller noe annet) har latt den stå igjen.`r`n`r`n" +
             "Den blå knappen ""Kjør TM5...""`r`n" +
             "CoreCycler/Manageren tester kun CPU-kjernene - ALDRI selve RAM-en/minnekontrolleren. En feil i en bred test (f.eks. OCCT ""CPU + RAM"") kan derfor like gjerne komme fra RAM/Infinity Fabric som fra en Curve Optimizer-verdi. TM5 (TestMem5, en velkjent community-minnetest, med anta777/1usmus-configer) følger nå med Manageren og startes direkte - velg ønsket config-fil inni TM5 sitt eget vindu (Manageren kan ikke styre dette automatisk). TM5 har ingen formell lisens (se LISENS-OG-OPPRINNELSE.txt i CoreCycler\\tools\\TestMem5\\) - tatt med som en bevisst avgjørelse siden det deles fritt i RAM-overklokkingsmiljøet.`r`n`r`n" +
-            "MemTest86 (et annet velkjent minnetest-verktøy) kan IKKE startes herfra - det kjører fra en oppstartbar USB-pinne FØR Windows starter, og kan derfor ikke vises eller styres fra Manageren sitt UI i det hele tatt."
+            "MemTest86 (et annet velkjent minnetest-verktøy) kan IKKE startes herfra - det kjører fra en oppstartbar USB-pinne FØR Windows starter, og kan derfor ikke vises eller styres fra Manageren sitt UI i det hele tatt.`r`n`r`n" +
+            "OCCT (uavhengig stresstest-/sertifiseringsverktøy, occt.app)`r`n" +
+            "Bundles IKKE med Manageren, og kan ikke startes herfra ennå - et fremtidig, valgfritt tilleggstrinn er under vurdering. Hvis du selv har lagt en kopi i en lokal OCCT-mappe: ingen lisensfil følger automatisk med OCCT.exe i en slik mappe - sjekk occt.app for gjeldende lisensvilkår (inkludert eventuell kommandolinje-automatisering) før bruk."
         'Automatisk gjenoppretting' = """Aktiv""/""Deaktivert"" styrer samlet om Manageren starter automatisk ved innlogging (Scheduled Task), og om datamaskinen automatisk restartes ved krasj/feil.`r`n`r`n" +
             "Når dette er aktivert, blir du spurt om å bekrefte Windows-PASSORDET ditt (IKKE PIN-koden/Windows Hello) når du trykker ""Start"" - kun hvis autologon ikke allerede er satt opp. Har kontoen ingen passord, hoppes spørsmålet automatisk over.`r`n`r`n" +
             "Feltet ""Minutter å vente etter restart før gjenopptak"" styrer hvor lenge Manageren venter etter en automatisk restart før testen gjenopptas."
