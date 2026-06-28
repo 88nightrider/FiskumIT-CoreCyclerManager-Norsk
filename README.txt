@@ -1,5 +1,12 @@
-﻿Fiskum IT CoreCycler Manager v0.8.7.17
+﻿Fiskum IT CoreCycler Manager v0.8.7.18
 ============================================================
+
+Nyheter i v0.8.7.18
+-------------------
+- Forenklet OCCT-merknaden i Hjelp-vinduet fra v0.8.7.17 - en planlagt
+  integrasjon mot OCCT er lagt på is. Nevner nå kun OCCT som et nyttig,
+  uavhengig verktøy for å dobbeltsjekke stabilitet, uten noen detaljer om
+  fremtidig integrasjon/lisens som ikke lenger er aktuelle
 
 Nyheter i v0.8.7.17
 -------------------
