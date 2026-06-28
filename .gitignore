@@ -1,8 +1,10 @@
 # Fiskum IT: dette repoet skal inneholde den aktive utgaven (flat struktur i roten, uten
 # versjonsstempling i mappenavn - versjonering skjer via git-tags/GitHub Releases) +
 # dokumentasjon i roten. Diagnostikkdumper/loggfiler fra ekte testmaskiner
-# ("Loggfiler for utvikling\", tidligere "Feil\"), brukerens egne notater
-# ("forslag.txt") og lokale Claude Code-innstillinger (".claude\") er bevisst utelatt.
+# ("Loggfiler for utvikling\", tidligere "Feil\"), ferdig-analyserte stabilitetstest-logger
+# merket med maskinnavn ("Sporingslogg\" - kan vaere 100+ MB per fil, hoyere skal ikke
+# versjoneres), brukerens egne notater ("forslag.txt") og lokale Claude Code-innstillinger
+# (".claude\") er bevisst utelatt.
 /*
 !/.gitignore
 !/.gitattributes
@@ -16,6 +18,7 @@
 !/Installer.bat
 !/Collect-FiskumITDiagnostics.ps1
 !/Collect-FiskumITDiagnostics.bat
+!/Analyser-HWiNFOLogg.ps1
 !/Create-FiskumITDiagnosticsShortcut.ps1
 !/Update-FiskumITCoreCyclerManager.ps1
 !/Manager/
